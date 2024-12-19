@@ -62,9 +62,9 @@ def plot_seismogram(source_id=0, output_dir='.', save_fig=True):
 if __name__ == "__main__":
     # 绘制第0号震源的地震记录
     plot_seismogram(source_id=0)
-    # 绘制第0号震源的地震记录
+    """  # 绘制第0号震源的地震记录
     plot_seismogram(source_id=0)
     # 指定数据目录并绘制第1号震源的地震记录
     plot_seismogram(source_id=1, output_dir='results')
     # 绘制但不保存图像
-    plot_seismogram(source_id=0, save_fig=False)
+    plot_seismogram(source_id=0, save_fig=False) """

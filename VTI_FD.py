@@ -29,7 +29,7 @@ class SimulationConfig:
     rho: float = 4000.0
     
     # 时间步长参数
-    NSTEP: int = 3000
+    NSTEP: int = 100
     DELTAT: float = 50e-9
     
     # 震源参数
@@ -55,11 +55,30 @@ class SimulationConfig:
     
     AXISYM: bool = False
     
+    # 检波器参数
+    FIRST_RECEIVER_X: int = 100        # 第一个检波器的水平位置（网格点）
+    FIRST_RECEIVER_Y: int = 200        # 第一个检波器的垂直位置（网格点）
+    RECEIVER_SPACING_X: int = 10       # 检波器水平间隔（网格点）
+    RECEIVER_SPACING_Y: int = 0        # 检波器垂直间隔（网格点）
+    N_RECEIVERS: int = 10              # 检波器总数
+    
     def __post_init__(self):
         """计算源位置"""
         self.xsource = (self.ISOURCE - 1) * self.DELTAX
         self.ysource = (self.JSOURCE - 1) * self.DELTAY
         
+        # 计算所有检波器位置
+        self.receiver_positions = self._calculate_receiver_positions()
+        
+    def _calculate_receiver_positions(self) -> list:
+        """计算所有检波器的位置"""
+        positions = []
+        for i in range(self.N_RECEIVERS):
+            x = self.FIRST_RECEIVER_X + i * self.RECEIVER_SPACING_X
+            y = self.FIRST_RECEIVER_Y + i * self.RECEIVER_SPACING_Y
+            positions.append((x, y))
+        return positions
+    
     def validate_parameters(self) -> None:
         """验证参数的有效性"""
         # 检查正交各向异性材料的定义
@@ -299,6 +318,7 @@ class WaveFieldSimulator:
         self.config = config
         self.pml = pml
         self.initialize_arrays()
+        self.receiver = Receiver(config)  # 添加检波器
         
     def initialize_arrays(self):
         """初始化波场数组"""
@@ -404,6 +424,10 @@ class WaveFieldSimulator:
         
         self.vx[self.config.ISOURCE, self.config.JSOURCE] += force_x * self.config.DELTAT / self.config.rho
         self.vy[self.config.ISOURCE, self.config.JSOURCE] += force_y * self.config.DELTAT / self.config.rho
+        
+    def record_receiver_data(self, it: int):
+        """记录检波器数据"""
+        self.receiver.record_velocities(self.vx, self.vy, it)
         
     def apply_boundary_conditions(self):
         """应用边界条件（刚性边界）"""
@@ -521,6 +545,52 @@ class WaveFieldVisualizer:
         # 保存图像
         plt.imsave(filename, img)
 
+class Receiver:
+    """检波器类"""
+    def __init__(self, config: SimulationConfig):
+        self.config = config
+        self.initialize_records()
+        
+    def initialize_records(self):
+        """初始化记录数组
+        维度顺序: (震源序号, 检波器序号, 时间步)
+        """
+        # 假设只有一个震源，如果有多个震源需要修改第一个维度
+        n_sources = 1  
+        self.vx_records = np.zeros((n_sources, self.config.N_RECEIVERS, self.config.NSTEP))
+        self.vy_records = np.zeros((n_sources, self.config.N_RECEIVERS, self.config.NSTEP))
+        
+    def record_velocities(self, vx: np.ndarray, vy: np.ndarray, it: int, source_id: int = 0):
+        """记录当前时间步的速度
+        
+        Args:
+            vx: 水平速度场
+            vy: 垂直速度场
+            it: 当前时间步
+            source_id: 震源序号(默认为0，表示单震源)
+        """
+        for i, (rx, ry) in enumerate(self.config.receiver_positions):
+            self.vx_records[source_id, i, it] = vx[rx, ry]
+            self.vy_records[source_id, i, it] = vy[rx, ry]
+            
+    def save_records(self, output_dir: str = '.'):
+        """保存检波器记录为numpy数组
+        
+        保存两个文件:
+        - seismogram_vx.npy: 水平分量地震记录
+        - seismogram_vy.npy: 垂直分量地震记录
+        """
+        np.save(f'{output_dir}/seismogram_vx.npy', self.vx_records)
+        np.save(f'{output_dir}/seismogram_vy.npy', self.vy_records)
+        
+        # 同时保存一些元数据
+        metadata = {
+            'dt': self.config.DELTAT,
+            'nt': self.config.NSTEP,
+            'receiver_positions': self.config.receiver_positions
+        }
+        np.save(f'{output_dir}/seismogram_metadata.npy', metadata)
+
 def run_simulation():
     """运行模拟"""
     start_time = time.time()
@@ -540,7 +610,7 @@ def run_simulation():
         pml = PMLCalculator(config)
         pml.compute_pml_parameters(quasi_cp_max)
         
-        # 初始化波场模拟器
+        # 初始化波场模拟器(包含检波器)
         simulator = WaveFieldSimulator(config, pml)
         
         # 初始化可视化器
@@ -562,11 +632,17 @@ def run_simulation():
             
             # 检查稳定性并可能输出信息
             velocnorm = simulator.check_stability(it)
+
+            # 记录检波器数据
+            simulator.record_receiver_data(it-1)  # it-1 因为数组索引从0开始
             
             # 可视化（如果是输出时间步）
             if it % config.IT_DISPLAY == 0 or it == 5:
                 visualizer.create_color_image(simulator.vx, it, 1)
                 visualizer.create_color_image(simulator.vy, it, 2)
+
+        # 模拟结束后保存检波器数据
+        simulator.receiver.save_records()
 
     finally:
         # 输出性能分析结果
