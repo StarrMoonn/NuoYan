@@ -22,11 +22,10 @@ class SimulationConfig:
     NPOINTS_PML: int = 10
     
     # 材料参数(Model I from Becache)
-    scale_aniso: float = 1e10
-    c11: float = 4.0 * scale_aniso
-    c13: float = 3.8 * scale_aniso
-    c33: float = 20.0 * scale_aniso
-    c44: float = 2.0 * scale_aniso
+    c11: float = 4.0e10 
+    c13: float = 3.8e10 
+    c33: float = 20.0e10 
+    c44: float = 2.0e10 
     rho: float = 4000.0
     
     # 时间步长参数
