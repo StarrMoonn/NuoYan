@@ -5,78 +5,79 @@ import cupy as cp
 
 class SeismicCPML2DAniso:
     def __init__(self):
-        # Grid parameters
-        self.NX = 401
-        self.NY = 401
+        """初始化二维VTI介质中的地震波传播模拟（使用CPML吸收边界条件）"""
+        # 网格参数设置
+        self.NX = 401                # x方向网格点数
+        self.NY = 401                # y方向网格点数
         
-        # Grid spacing
-        self.DELTAX = 0.0625e-2
-        self.DELTAY = self.DELTAX
+        # 网格间距设置
+        self.DELTAX = 0.0625e-2      # x方向网格间距(m)
+        self.DELTAY = self.DELTAX     # y方向网格间距(m)，与x方向相同
         
-        # PML flags and parameters  
-        self.USE_PML_XMIN = True
-        self.USE_PML_XMAX = True
-        self.USE_PML_YMIN = True
-        self.USE_PML_YMAX = True
-        self.NPOINTS_PML = 10
+        # PML吸收边界参数设置
+        self.USE_PML_XMIN = True      # 是否使用左边界PML
+        self.USE_PML_XMAX = True      # 是否使用右边界PML
+        self.USE_PML_YMIN = True      # 是否使用下边界PML
+        self.USE_PML_YMAX = True      # 是否使用上边界PML
+        self.NPOINTS_PML = 10         # PML层的厚度(网格点数)
         
-        # Material properties (Model I from Becache, Fauqueux and Joly)
-        self.scale_aniso = 1.0e10
-        self.c11 = 4.0 * self.scale_aniso
-        self.c12 = 3.8 * self.scale_aniso  
-        self.c22 = 20.0 * self.scale_aniso
-        self.c33 = 2.0 * self.scale_aniso
-        self.rho = 4000.0
-        self.f0 = 200.0e3
+        # 材料属性参数 (来自Becache等人的模型I)
+        self.scale_aniso = 1.0e10     # 各向异性参数缩放因子
+        self.c11 = 4.0 * self.scale_aniso    # VTI介质刚度系数c11
+        self.c12 = 3.8 * self.scale_aniso    # VTI介质刚度系数c12
+        self.c22 = 20.0 * self.scale_aniso   # VTI介质刚度系数c22
+        self.c33 = 2.0 * self.scale_aniso    # VTI介质刚度系数c33
+        self.rho = 4000.0             # 介质密度(kg/m³)
+        self.f0 = 200.0e3             # 震源主频(Hz)
         
-        # Time stepping parameters
-        self.NSTEP = 3000  # Changed to match Fortran version
-        self.DELTAT = 50.0e-9
+        # 时间步进参数
+        self.NSTEP = 3000             # 总时间步数
+        self.DELTAT = 50.0e-9         # 时间步长(s)
         
-        # Source parameters
-        self.t0 = 1.20/self.f0
-        self.factor = 1.0e7
-        self.ISOURCE = self.NX // 2
-        self.JSOURCE = self.NY // 2
-        self.xsource = (self.ISOURCE - 1) * self.DELTAX
-        self.ysource = (self.JSOURCE - 1) * self.DELTAY
-        self.ANGLE_FORCE = 0.0
+        # 震源参数设置
+        self.t0 = 1.20/self.f0        # 时间延迟
+        self.factor = 1.0e7           # 震源振幅因子
+        self.ISOURCE = self.NX // 2   # 震源x位置(网格点)
+        self.JSOURCE = self.NY // 2   # 震源y位置(网格点)
+        self.xsource = (self.ISOURCE - 1) * self.DELTAX  # 震源实际x坐标
+        self.ysource = (self.JSOURCE - 1) * self.DELTAY  # 震源实际y坐标
+        self.ANGLE_FORCE = 0.0        # 震源力的方向角度(度)
         
-        # Receiver parameters
-        self.NREC = 50  # Number of receivers
-        self.first_rec_x = 100  # First receiver x position (grid points)
-        self.first_rec_z = 50   # First receiver z position (grid points)
-        self.rec_dx = 4         # Receiver x spacing (grid points)
-        self.rec_dz = 0         # Receiver z spacing (grid points)
+        # 检波器参数设置
+        self.NREC = 50                # 检波器数量
+        self.first_rec_x = 100        # 第一个检波器x位置
+        self.first_rec_z = 50         # 第一个检波器z位置
+        self.rec_dx = 4               # 检波器x方向间距
+        self.rec_dz = 0               # 检波器z方向间距
         
-        # Initialize receiver arrays
-        self.rec_x = np.zeros(self.NREC, dtype=np.int32)
-        self.rec_z = np.zeros(self.NREC, dtype=np.int32)
+        # 初始化检波器数组
+        self.rec_x = np.zeros(self.NREC, dtype=np.int32)  # 检波器x坐标数组
+        self.rec_z = np.zeros(self.NREC, dtype=np.int32)  # 检波器z坐标数组
         
-        # Initialize seismogram arrays
-        self.seismogram_vx = np.zeros((self.NSTEP, self.NREC))
-        self.seismogram_vz = np.zeros((self.NSTEP, self.NREC))
+        # 初始化地震记录数组
+        self.seismogram_vx = np.zeros((self.NSTEP, self.NREC))  # x方向速度记录
+        self.seismogram_vz = np.zeros((self.NSTEP, self.NREC))  # z方向速度记录
         
-        # Display parameters
-        self.IT_DISPLAY = 100
+        # 显示参数
+        self.IT_DISPLAY = 100         # 波场快照输出间隔
         
-        # Constants
-        self.PI = cp.pi
-        self.DEGREES_TO_RADIANS = self.PI / 180.0
-        self.ZERO = cp.float64(0.0)
-        self.HUGEVAL = cp.float64(1.0e+30)
-        self.STABILITY_THRESHOLD = cp.float64(1.0e+25)
+        # 常量定义
+        self.PI = cp.pi               # 圆周率
+        self.DEGREES_TO_RADIANS = self.PI / 180.0  # 角度转弧度系数
+        self.ZERO = cp.float64(0.0)   # 零值常量
+        self.HUGEVAL = cp.float64(1.0e+30)  # 大数值常量
+        self.STABILITY_THRESHOLD = cp.float64(1.0e+25)  # 稳定性阈值
         
-        # PML parameters
-        self.NPOWER = cp.float64(2.0)
-        self.K_MAX_PML = cp.float64(1.0)
-        self.ALPHA_MAX_PML = cp.float64(2.0 * self.PI * (self.f0/2.0))
+        # PML参数
+        self.NPOWER = cp.float64(2.0)  # PML衰减函数的幂次
+        self.K_MAX_PML = cp.float64(1.0)  # PML最大拉伸系数
+        self.ALPHA_MAX_PML = cp.float64(2.0 * self.PI * (self.f0/2.0))  # PML最大频率调制系数
         
-        # Initialize arrays
+        # 初始化计算所需数组
         self.initialize_arrays()
         
-        # Setup receivers
-        self.setup_receivers() 
+        # 设置检波器位置
+        self.setup_receivers()
         
         # 定义多炮记录数组
         self.NSHOT = 1  # 炮数(可以修改)
