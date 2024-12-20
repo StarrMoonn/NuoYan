@@ -10,13 +10,9 @@
 ! using a finite-difference method with Convolutional Perfectly Matched
 ! Layer (C-PML) conditions.
 !
-! This software is a computer program whose purpose is to solve
-! the two-dimensional viscoelastic anisotropic or poroelastic wave equation
-! using a spectral-element method (SEM).
-!
 ! This program is free software; you can redistribute it and/or modify
 ! it under the terms of the GNU General Public License as published by
-! the Free Software Foundation; either version 2 of the License, or
+! the Free Software Foundation; either version 3 of the License, or
 ! (at your option) any later version.
 !
 ! This program is distributed in the hope that it will be useful,
@@ -132,7 +128,7 @@
 ! volume = {27},
 ! number = {5},
 ! pages = {334-339},
-! doi = {10.1002/1098-2760(20001205)27:5<334::AID-MOP14>3.0.CO;2-A}}
+! doi = {10.1002/1098-2760(20001205)27:5 < 334::AID-MOP14>3.0.CO;2-A}}
 !
 ! To display the 2D results as color images, use:
 !
@@ -270,8 +266,23 @@
 ! velocity threshold above which we consider that the code became unstable
   double precision, parameter :: STABILITY_THRESHOLD = 1.d+25
 
+! Receiver parameters
+  integer, parameter :: NREC = 50                    ! number of receivers
+  integer, parameter :: first_rec_x = 100            ! first receiver x position
+  integer, parameter :: first_rec_y = 50             ! first receiver y position
+  integer, parameter :: rec_dx = 4                   ! receiver x spacing
+  integer, parameter :: rec_dy = 0                   ! receiver y spacing
+
+! Arrays for seismograms
+  double precision, dimension(NSTEP,NREC) :: seismogram_vx, seismogram_vy
+
+! Arrays for receiver positions
+  integer, dimension(NREC) :: ix_rec, iy_rec
+
 ! main arrays
   double precision, dimension(NX,NY) :: vx,vy,sigmaxx,sigmayy,sigmaxy
+  double precision, dimension(NX,NY,NSTEP) :: wavefield_vx, wavefield_vy
+  double precision, dimension(NX,NY,NSTEP) :: wavefield_sigmaxx, wavefield_sigmayy
 
 ! power to compute d0 profile
   double precision, parameter :: NPOWER = 2.d0
@@ -301,21 +312,6 @@
       value_dsigmayy_dy, &
       value_dsigmaxy_dx, &
       value_dsigmaxy_dy
-      
-  ! additional arrays for storing wavefield at each step
-      double precision, dimension(NX,NY,NSTEP) :: vx_wavefield, vy_wavefield
-    
-      integer :: i, j, it
-      
-      ! Initialize arrays
-      vx(:,:) = 0.0d0
-      vy(:,:) = 0.0d0
-      sigmaxx(:,:) = 0.0d0
-      sigmayy(:,:) = 0.0d0
-      sigmaxy(:,:) = 0.0d0
-      vx_wavefield(:,:,:) = 0.0d0
-      vy_wavefield(:,:,:) = 0.0d0
-
 
 ! 1D arrays for the damping profiles
   double precision, dimension(NX) :: d_x,K_x,alpha_x,a_x,b_x,d_x_half,K_x_half,alpha_x_half,a_x_half,b_x_half
@@ -333,19 +329,6 @@
 
 ! for stability estimate
   double precision :: quasi_cp_max,aniso_stability_criterion,aniso2,aniso3
-
-! Receiver parameters
-  integer, parameter :: NREC = 50                    ! number of receivers
-  integer, parameter :: first_rec_x = 100            ! first receiver x position
-  integer, parameter :: first_rec_y = 50             ! first receiver y position
-  integer, parameter :: rec_dx = 4                   ! receiver x spacing
-  integer, parameter :: rec_dy = 0                   ! receiver y spacing
-  
-! Arrays for seismograms
-  double precision, dimension(NSTEP,NREC) :: seismogram_vx, seismogram_vy
-
-! Arrays for receiver positions
-  integer, dimension(NREC) :: ix_rec, iy_rec
 
 !---
 !--- program starts here
@@ -374,26 +357,26 @@
   print *
 
 ! from Becache et al., INRIA report, equation 7 page 5 http://hal.inria.fr/docs/00/07/22/83/PDF/RR-4304.pdf
-  if(c11*c22 - c12*c12 <= 0.d0) stop 'problem in definition of orthotropic material'
+  if (c11*c22 - c12*c12 <= 0.d0) stop 'problem in definition of orthotropic material'
 
 ! check intrinsic mathematical stability of PML model for an anisotropic material
 ! from E. B\'ecache, S. Fauqueux and P. Joly, Stability of Perfectly Matched Layers, group
 ! velocities and anisotropic waves, Journal of Computational Physics, 188(2), p. 399-433 (2003)
   aniso_stability_criterion = ((c12+c33)**2 - c11*(c22-c33)) * ((c12+c33)**2 + c33*(c22-c33))
   print *,'PML anisotropy stability criterion from Becache et al. 2003 = ',aniso_stability_criterion
-  if(aniso_stability_criterion > 0.d0 .and. (USE_PML_XMIN .or. USE_PML_XMAX .or. USE_PML_YMIN .or. USE_PML_YMAX)) &
+  if (aniso_stability_criterion > 0.d0 .and. (USE_PML_XMIN .or. USE_PML_XMAX .or. USE_PML_YMIN .or. USE_PML_YMAX)) &
      print *,'WARNING: PML model mathematically intrinsically unstable for this anisotropic material for condition 1'
   print *
 
   aniso2 = (c12 + 2*c33)**2 - c11*c22
   print *,'PML aniso2 stability criterion from Becache et al. 2003 = ',aniso2
-  if(aniso2 > 0.d0 .and. (USE_PML_XMIN .or. USE_PML_XMAX .or. USE_PML_YMIN .or. USE_PML_YMAX)) &
+  if (aniso2 > 0.d0 .and. (USE_PML_XMIN .or. USE_PML_XMAX .or. USE_PML_YMIN .or. USE_PML_YMAX)) &
      print *,'WARNING: PML model mathematically intrinsically unstable for this anisotropic material for condition 2'
   print *
 
   aniso3 = (c12 + c33)**2 - c11*c22 - c33**2
   print *,'PML aniso3 stability criterion from Becache et al. 2003 = ',aniso3
-  if(aniso3 > 0.d0 .and. (USE_PML_XMIN .or. USE_PML_XMAX .or. USE_PML_YMIN .or. USE_PML_YMAX)) &
+  if (aniso3 > 0.d0 .and. (USE_PML_XMIN .or. USE_PML_XMAX .or. USE_PML_YMIN .or. USE_PML_YMAX)) &
      print *,'WARNING: PML model mathematically intrinsically unstable for this anisotropic material for condition 3'
   print *
 
@@ -410,7 +393,7 @@
   Rcoef = 0.001d0
 
 ! check that NPOWER is okay
-  if(NPOWER < 1) stop 'NPOWER must be greater than 1'
+  if (NPOWER < 1) stop 'NPOWER must be greater than 1'
 
 ! compute d0 from INRIA report section 6.1 http://hal.inria.fr/docs/00/07/32/19/PDF/RR-3471.pdf
   d0_x = - (NPOWER + 1) * quasi_cp_max * log(Rcoef) / (2.d0 * thickness_PML_x)
@@ -450,65 +433,65 @@
     xval = DELTAX * dble(i-1)
 
 !---------- left edge
-    if(USE_PML_XMIN) then
+    if (USE_PML_XMIN) then
 
 ! define damping profile at the grid points
       abscissa_in_PML = xoriginleft - xval
-      if(abscissa_in_PML >= ZERO) then
+      if (abscissa_in_PML >= ZERO) then
         abscissa_normalized = abscissa_in_PML / thickness_PML_x
         d_x(i) = d0_x * abscissa_normalized**NPOWER
 ! from Stephen Gedney's unpublished class notes for class EE699, lecture 8, slide 8-2
         K_x(i) = 1.d0 + (K_MAX_PML - 1.d0) * abscissa_normalized**NPOWER
-        alpha_x(i) = ALPHA_MAX_PML * (1.d0 - abscissa_normalized) + 0.1d0 * ALPHA_MAX_PML
+        alpha_x(i) = ALPHA_MAX_PML * (1.d0 - abscissa_normalized)
       endif
 
 ! define damping profile at half the grid points
       abscissa_in_PML = xoriginleft - (xval + DELTAX/2.d0)
-      if(abscissa_in_PML >= ZERO) then
+      if (abscissa_in_PML >= ZERO) then
         abscissa_normalized = abscissa_in_PML / thickness_PML_x
         d_x_half(i) = d0_x * abscissa_normalized**NPOWER
 ! from Stephen Gedney's unpublished class notes for class EE699, lecture 8, slide 8-2
         K_x_half(i) = 1.d0 + (K_MAX_PML - 1.d0) * abscissa_normalized**NPOWER
-        alpha_x_half(i) = ALPHA_MAX_PML * (1.d0 - abscissa_normalized) + 0.1d0 * ALPHA_MAX_PML
+        alpha_x_half(i) = ALPHA_MAX_PML * (1.d0 - abscissa_normalized)
       endif
 
     endif
 
 !---------- right edge
-    if(USE_PML_XMAX) then
+    if (USE_PML_XMAX) then
 
 ! define damping profile at the grid points
       abscissa_in_PML = xval - xoriginright
-      if(abscissa_in_PML >= ZERO) then
+      if (abscissa_in_PML >= ZERO) then
         abscissa_normalized = abscissa_in_PML / thickness_PML_x
         d_x(i) = d0_x * abscissa_normalized**NPOWER
 ! from Stephen Gedney's unpublished class notes for class EE699, lecture 8, slide 8-2
         K_x(i) = 1.d0 + (K_MAX_PML - 1.d0) * abscissa_normalized**NPOWER
-        alpha_x(i) = ALPHA_MAX_PML * (1.d0 - abscissa_normalized) + 0.1d0 * ALPHA_MAX_PML
+        alpha_x(i) = ALPHA_MAX_PML * (1.d0 - abscissa_normalized)
       endif
 
 ! define damping profile at half the grid points
       abscissa_in_PML = xval + DELTAX/2.d0 - xoriginright
-      if(abscissa_in_PML >= ZERO) then
+      if (abscissa_in_PML >= ZERO) then
         abscissa_normalized = abscissa_in_PML / thickness_PML_x
         d_x_half(i) = d0_x * abscissa_normalized**NPOWER
 ! from Stephen Gedney's unpublished class notes for class EE699, lecture 8, slide 8-2
         K_x_half(i) = 1.d0 + (K_MAX_PML - 1.d0) * abscissa_normalized**NPOWER
-        alpha_x_half(i) = ALPHA_MAX_PML * (1.d0 - abscissa_normalized) + 0.1d0 * ALPHA_MAX_PML
+        alpha_x_half(i) = ALPHA_MAX_PML * (1.d0 - abscissa_normalized)
       endif
 
     endif
 
 ! just in case, for -5 at the end
-    if(alpha_x(i) < ZERO) alpha_x(i) = ZERO
-    if(alpha_x_half(i) < ZERO) alpha_x_half(i) = ZERO
+    if (alpha_x(i) < ZERO) alpha_x(i) = ZERO
+    if (alpha_x_half(i) < ZERO) alpha_x_half(i) = ZERO
 
     b_x(i) = exp(- (d_x(i) / K_x(i) + alpha_x(i)) * DELTAT)
     b_x_half(i) = exp(- (d_x_half(i) / K_x_half(i) + alpha_x_half(i)) * DELTAT)
 
 ! this to avoid division by zero outside the PML
-    if(abs(d_x(i)) > 1.d-6) a_x(i) = d_x(i) * (b_x(i) - 1.d0) / (K_x(i) * (d_x(i) + K_x(i) * alpha_x(i)))
-    if(abs(d_x_half(i)) > 1.d-6) a_x_half(i) = d_x_half(i) * &
+    if (abs(d_x(i)) > 1.d-6) a_x(i) = d_x(i) * (b_x(i) - 1.d0) / (K_x(i) * (d_x(i) + K_x(i) * alpha_x(i)))
+    if (abs(d_x_half(i)) > 1.d-6) a_x_half(i) = d_x_half(i) * &
       (b_x_half(i) - 1.d0) / (K_x_half(i) * (d_x_half(i) + K_x_half(i) * alpha_x_half(i)))
 
   enddo
@@ -525,51 +508,51 @@
     yval = DELTAY * dble(j-1)
 
 !---------- bottom edge
-    if(USE_PML_YMIN) then
+    if (USE_PML_YMIN) then
 
 ! define damping profile at the grid points
       abscissa_in_PML = yoriginbottom - yval
-      if(abscissa_in_PML >= ZERO) then
+      if (abscissa_in_PML >= ZERO) then
         abscissa_normalized = abscissa_in_PML / thickness_PML_y
         d_y(j) = d0_y * abscissa_normalized**NPOWER
 ! from Stephen Gedney's unpublished class notes for class EE699, lecture 8, slide 8-2
         K_y(j) = 1.d0 + (K_MAX_PML - 1.d0) * abscissa_normalized**NPOWER
-        alpha_y(j) = ALPHA_MAX_PML * (1.d0 - abscissa_normalized) + 0.1d0 * ALPHA_MAX_PML
+        alpha_y(j) = ALPHA_MAX_PML * (1.d0 - abscissa_normalized)
       endif
 
 ! define damping profile at half the grid points
       abscissa_in_PML = yoriginbottom - (yval + DELTAY/2.d0)
-      if(abscissa_in_PML >= ZERO) then
+      if (abscissa_in_PML >= ZERO) then
         abscissa_normalized = abscissa_in_PML / thickness_PML_y
         d_y_half(j) = d0_y * abscissa_normalized**NPOWER
 ! from Stephen Gedney's unpublished class notes for class EE699, lecture 8, slide 8-2
         K_y_half(j) = 1.d0 + (K_MAX_PML - 1.d0) * abscissa_normalized**NPOWER
-        alpha_y_half(j) = ALPHA_MAX_PML * (1.d0 - abscissa_normalized) + 0.1d0 * ALPHA_MAX_PML
+        alpha_y_half(j) = ALPHA_MAX_PML * (1.d0 - abscissa_normalized)
       endif
 
     endif
 
 !---------- top edge
-    if(USE_PML_YMAX) then
+    if (USE_PML_YMAX) then
 
 ! define damping profile at the grid points
       abscissa_in_PML = yval - yorigintop
-      if(abscissa_in_PML >= ZERO) then
+      if (abscissa_in_PML >= ZERO) then
         abscissa_normalized = abscissa_in_PML / thickness_PML_y
         d_y(j) = d0_y * abscissa_normalized**NPOWER
 ! from Stephen Gedney's unpublished class notes for class EE699, lecture 8, slide 8-2
         K_y(j) = 1.d0 + (K_MAX_PML - 1.d0) * abscissa_normalized**NPOWER
-        alpha_y(j) = ALPHA_MAX_PML * (1.d0 - abscissa_normalized) + 0.1d0 * ALPHA_MAX_PML
+        alpha_y(j) = ALPHA_MAX_PML * (1.d0 - abscissa_normalized)
       endif
 
 ! define damping profile at half the grid points
       abscissa_in_PML = yval + DELTAY/2.d0 - yorigintop
-      if(abscissa_in_PML >= ZERO) then
+      if (abscissa_in_PML >= ZERO) then
         abscissa_normalized = abscissa_in_PML / thickness_PML_y
         d_y_half(j) = d0_y * abscissa_normalized**NPOWER
 ! from Stephen Gedney's unpublished class notes for class EE699, lecture 8, slide 8-2
         K_y_half(j) = 1.d0 + (K_MAX_PML - 1.d0) * abscissa_normalized**NPOWER
-        alpha_y_half(j) = ALPHA_MAX_PML * (1.d0 - abscissa_normalized) + 0.1d0 * ALPHA_MAX_PML
+        alpha_y_half(j) = ALPHA_MAX_PML * (1.d0 - abscissa_normalized)
       endif
 
     endif
@@ -578,8 +561,8 @@
     b_y_half(j) = exp(- (d_y_half(j) / K_y_half(j) + alpha_y_half(j)) * DELTAT)
 
 ! this to avoid division by zero outside the PML
-    if(abs(d_y(j)) > 1.d-6) a_y(j) = d_y(j) * (b_y(j) - 1.d0) / (K_y(j) * (d_y(j) + K_y(j) * alpha_y(j)))
-    if(abs(d_y_half(j)) > 1.d-6) a_y_half(j) = d_y_half(j) * &
+    if (abs(d_y(j)) > 1.d-6) a_y(j) = d_y(j) * (b_y(j) - 1.d0) / (K_y(j) * (d_y(j) + K_y(j) * alpha_y(j)))
+    if (abs(d_y_half(j)) > 1.d-6) a_y_half(j) = d_y_half(j) * &
       (b_y_half(j) - 1.d0) / (K_y_half(j) * (d_y_half(j) + K_y_half(j) * alpha_y_half(j)))
 
   enddo
@@ -596,7 +579,7 @@
   Courant_number = quasi_cp_max * DELTAT * sqrt(1.d0/DELTAX**2 + 1.d0/DELTAY**2)
   print *,'Courant number is ',Courant_number
   print *
-  if(Courant_number > 1.d0) stop 'time step is too large, simulation will be unstable'
+  if (Courant_number > 1.d0) stop 'time step is too large, simulation will be unstable'
 
 ! suppress old files (can be commented out if "call system" is missing in your compiler)
 ! call system('rm -f Vx_*.dat Vy_*.dat image*.pnm image*.gif')
@@ -607,6 +590,10 @@
   sigmaxx(:,:) = ZERO
   sigmayy(:,:) = ZERO
   sigmaxy(:,:) = ZERO
+  wavefield_vx(:,:,:) = ZERO
+  wavefield_vy(:,:,:) = ZERO
+  wavefield_sigmaxx(:,:,:) = ZERO
+  wavefield_sigmayy(:,:,:) = ZERO
 
 ! PML
   memory_dvx_dx(:,:) = ZERO
@@ -618,24 +605,19 @@
   memory_dsigmaxy_dx(:,:) = ZERO
   memory_dsigmaxy_dy(:,:) = ZERO
 
-!---
-!---  beginning of time loop
-!---
-  double precision, dimension(NX, NY, NSTEP) :: wavefield_vx, wavefield_vy
-  double precision, dimension(NX, NY, NSTEP) :: wavefield_sigmaxx, wavefield_sigmayy
-  
-  ! Initialize receiver positions
+! Initialize receiver positions
   do i = 1,NREC
     ix_rec(i) = first_rec_x + (i-1)*rec_dx
     iy_rec(i) = first_rec_y + (i-1)*rec_dy
-    
-    ! Check if receivers are within the grid
-    if (ix_rec(i) < 1 .or. ix_rec(i) > NX .or. &
-        iy_rec(i) < 1 .or. iy_rec(i) > NY) then
-      print *, 'Error: receiver position outside grid'
+    if (ix_rec(i) < 1 .or. ix_rec(i) > NX .or. iy_rec(i) < 1 .or. iy_rec(i) > NY) then
+      print *,'Receiver ',i,' is outside the grid'
       stop
     endif
   enddo
+
+!---
+!---  beginning of time loop
+!---
 
   do it = 1,NSTEP
 
@@ -715,28 +697,6 @@
 
     enddo
   enddo
-  
-  wavefield_vx(:, :, it) = vx(:, :)
-  wavefield_vy(:, :, it) = vy(:, :)
-  wavefield_sigmaxx(:, :, it) = sigmaxx(:, :)
-  wavefield_sigmayy(:, :, it) = sigmayy(:, :)
-  
-  open(unit=10, file='wavefield_vx.dat', status='unknown', form='unformatted')
-write(10) wavefield_vx
-close(10)
-
-open(unit=11, file='wavefield_vy.dat', status='unknown', form='unformatted')
-write(11) wavefield_vy
-close(11)
-
-open(unit=12, file='wavefield_sigmaxx.dat', status='unknown', form='unformatted')
-write(12) wavefield_sigmaxx
-close(12)
-
-open(unit=13, file='wavefield_sigmayy.dat', status='unknown', form='unformatted')
-write(13) wavefield_sigmayy
-close(13)
-
 
 ! add the source (force vector located at a given grid point)
   a = pi*pi*f0*f0
@@ -774,14 +734,8 @@ close(13)
   vy(:,1) = ZERO
   vy(:,NY) = ZERO
 
-! Store seismogram data
-  do i = 1,NREC
-    seismogram_vx(it,i) = vx(ix_rec(i),iy_rec(i))
-    seismogram_vy(it,i) = vy(ix_rec(i),iy_rec(i))
-  enddo
-
 ! output information
-  if(mod(it,IT_DISPLAY) == 0 .or. it == 5) then
+  if (mod(it,IT_DISPLAY) == 0 .or. it == 5) then
 
 ! print maximum of norm of velocity
     velocnorm = maxval(sqrt(vx**2 + vy**2))
@@ -790,14 +744,26 @@ close(13)
     print *,'Max norm velocity vector V (m/s) = ',velocnorm
     print *
 ! check stability of the code, exit if unstable
-    if(velocnorm > STABILITY_THRESHOLD) stop 'code became unstable and blew up'
+    if (velocnorm > STABILITY_THRESHOLD) stop 'code became unstable and blew up'
 
-    !call create_color_image(vx,NX,NY,it,ISOURCE,JSOURCE, &
+    call create_color_image(vx,NX,NY,it,ISOURCE,JSOURCE, &
                          NPOINTS_PML,USE_PML_XMIN,USE_PML_XMAX,USE_PML_YMIN,USE_PML_YMAX,1)
-    !call create_color_image(vy,NX,NY,it,ISOURCE,JSOURCE, &
+    call create_color_image(vy,NX,NY,it,ISOURCE,JSOURCE, &
                          NPOINTS_PML,USE_PML_XMIN,USE_PML_XMAX,USE_PML_YMIN,USE_PML_YMAX,2)
 
   endif
+
+! Save wavefield data
+  wavefield_vx(:,:,it) = vx(:,:)
+  wavefield_vy(:,:,it) = vy(:,:)
+  wavefield_sigmaxx(:,:,it) = sigmaxx(:,:)
+  wavefield_sigmayy(:,:,it) = sigmayy(:,:)
+
+! Record seismograms
+  do i = 1,NREC
+    seismogram_vx(it,i) = vx(ix_rec(i),iy_rec(i))
+    seismogram_vy(it,i) = vy(ix_rec(i),iy_rec(i))
+  enddo
 
   enddo   ! end of time loop
 
@@ -805,22 +771,151 @@ close(13)
   print *,'End of the simulation'
   print *
 
-! Output seismogram data to files
-  open(unit=27,file='seismogram_vx.dat',status='unknown')
-  open(unit=28,file='seismogram_vy.dat',status='unknown')
-  
+! Save seismograms to file
+  open(unit=20, file='seismogram_vx.dat', status='unknown')
   do it = 1,NSTEP
-    write(27,*) (seismogram_vx(it,i), i=1,NREC)
-    write(28,*) (seismogram_vy(it,i), i=1,NREC)
+    write(20,*) (seismogram_vx(it,i), i=1,NREC)
   enddo
-  
-  close(27)
-  close(28)
+  close(20)
+
+  open(unit=21, file='seismogram_vy.dat', status='unknown')
+  do it = 1,NSTEP
+    write(21,*) (seismogram_vy(it,i), i=1,NREC)
+  enddo
+  close(21)
 
 ! Call Python script to plot seismograms
-call system('python plot_seismograms.py')
+  call system('python plot_seismograms.py')
 
   end program seismic_CPML_2D_aniso
 
+!----
+!----  routine to create a color image of a given vector component
+!----  the image is created in PNM format and then converted to GIF
+!----
 
+  subroutine create_color_image(image_data_2D,NX,NY,it,ISOURCE,JSOURCE, &
+              NPOINTS_PML,USE_PML_XMIN,USE_PML_XMAX,USE_PML_YMIN,USE_PML_YMAX,field_number)
+
+  implicit none
+
+! non linear display to enhance small amplitudes for graphics
+  double precision, parameter :: POWER_DISPLAY = 0.30d0
+
+! amplitude threshold above which we draw the color point
+  double precision, parameter :: cutvect = 0.01d0
+
+! use black or white background for points that are below the threshold
+  logical, parameter :: WHITE_BACKGROUND = .true.
+
+! size of cross and square in pixels drawn to represent the source and the receivers
+  integer, parameter :: width_cross = 5, thickness_cross = 1, size_square = 3
+
+  integer NX,NY,it,field_number,ISOURCE,JSOURCE,NPOINTS_PML
+  logical USE_PML_XMIN,USE_PML_XMAX,USE_PML_YMIN,USE_PML_YMAX
+
+  double precision, dimension(NX,NY) :: image_data_2D
+
+  integer :: ix,iy
+
+  character(len=100) :: file_name,system_command
+
+  integer :: R, G, B
+
+  double precision :: normalized_value,max_amplitude
+
+! open image file and create system command to convert image to more convenient format
+! use the "convert" command from ImageMagick http://www.imagemagick.org
+  if (field_number == 1) then
+    write(file_name,"('image',i6.6,'_Vx.pnm')") it
+    write(system_command,"('convert image',i6.6,'_Vx.pnm image',i6.6,'_Vx.gif ; rm image',i6.6,'_Vx.pnm')") it,it,it
+  else if (field_number == 2) then
+    write(file_name,"('image',i6.6,'_Vy.pnm')") it
+    write(system_command,"('convert image',i6.6,'_Vy.pnm image',i6.6,'_Vy.gif ; rm image',i6.6,'_Vy.pnm')") it,it,it
+  endif
+
+  open(unit=27, file=file_name, status='unknown')
+
+  write(27,"('P3')") ! write image in PNM P3 format
+
+  write(27,*) NX,NY ! write image size
+  write(27,*) '255' ! maximum value of each pixel color
+
+! compute maximum amplitude
+  max_amplitude = maxval(abs(image_data_2D))
+
+! image starts in upper-left corner in PNM format
+  do iy=NY,1,-1
+    do ix=1,NX
+
+! define data as vector component normalized to [-1:1] and rounded to nearest integer
+! keeping in mind that amplitude can be negative
+    normalized_value = image_data_2D(ix,iy) / max_amplitude
+
+! suppress values that are outside [-1:+1] to avoid small edge effects
+    if (normalized_value < -1.d0) normalized_value = -1.d0
+    if (normalized_value > 1.d0) normalized_value = 1.d0
+
+! draw an orange cross to represent the source
+    if ((ix >= ISOURCE - width_cross .and. ix <= ISOURCE + width_cross .and. &
+        iy >= JSOURCE - thickness_cross .and. iy <= JSOURCE + thickness_cross) .or. &
+       (ix >= ISOURCE - thickness_cross .and. ix <= ISOURCE + thickness_cross .and. &
+        iy >= JSOURCE - width_cross .and. iy <= JSOURCE + width_cross)) then
+      R = 255
+      G = 157
+      B = 0
+
+! display two-pixel-thick black frame around the image
+  else if (ix <= 2 .or. ix >= NX-1 .or. iy <= 2 .or. iy >= NY-1) then
+      R = 0
+      G = 0
+      B = 0
+
+! display edges of the PML layers
+  else if ((USE_PML_XMIN .and. ix == NPOINTS_PML) .or. &
+          (USE_PML_XMAX .and. ix == NX - NPOINTS_PML) .or. &
+          (USE_PML_YMIN .and. iy == NPOINTS_PML) .or. &
+          (USE_PML_YMAX .and. iy == NY - NPOINTS_PML)) then
+      R = 255
+      G = 150
+      B = 0
+
+! suppress all the values that are below the threshold
+    else if (abs(image_data_2D(ix,iy)) <= max_amplitude * cutvect) then
+
+! use a black or white background for points that are below the threshold
+      if (WHITE_BACKGROUND) then
+        R = 255
+        G = 255
+        B = 255
+      else
+        R = 0
+        G = 0
+        B = 0
+      endif
+
+! represent regular image points using red if value is positive, blue if negative
+    else if (normalized_value >= 0.d0) then
+      R = nint(255.d0*normalized_value**POWER_DISPLAY)
+      G = 0
+      B = 0
+    else
+      R = 0
+      G = 0
+      B = nint(255.d0*abs(normalized_value)**POWER_DISPLAY)
+    endif
+
+! write color pixel
+    write(27,"(i3,' ',i3,' ',i3)") R,G,B
+
+    enddo
+  enddo
+
+! close file
+  close(27)
+
+! call the system to convert image to Gif (can be commented out if "call system" is missing in your compiler)
+! call system(system_command)
+
+  end subroutine create_color_image
 

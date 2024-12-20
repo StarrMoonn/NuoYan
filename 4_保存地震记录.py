@@ -30,7 +30,7 @@ class SeismicCPML2DAniso:
         self.f0 = 200.0e3
         
         # Time stepping parameters
-        self.NSTEP = 1000  # Changed to match Fortran version
+        self.NSTEP = 3000  # Changed to match Fortran version
         self.DELTAT = 50.0e-9
         
         # Source parameters
