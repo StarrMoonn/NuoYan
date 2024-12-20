@@ -1,9 +1,16 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
-# 读取地震记录数据
-vx_data = np.loadtxt('seismogram_vx.dat')
-vy_data = np.loadtxt('seismogram_vy.dat')
+try:
+    # 读取地震记录数据
+    vx_data = np.loadtxt('seismogram_vx.dat')
+    vy_data = np.loadtxt('seismogram_vy.dat')
+except FileNotFoundError:
+    print("错误：找不到数据文件！请确保 seismogram_vx.dat 和 seismogram_vy.dat 文件存在。")
+    exit()
+except ValueError:
+    print("错误：数据文件格式不正确！请确保文件包含有效的数值数据。")
+    exit()
 
 # 设置时间和距离参数
 nt, nr = vx_data.shape
