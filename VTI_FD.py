@@ -21,11 +21,10 @@ class SeismicCPML2DAniso:
         self.NPOINTS_PML = 10     # PML层的厚度(网格点数)
         
         # 材料属性参数 (来自Becache, Fauqueux和Joly的模型I)
-        self.scale_aniso = 1.0e10  # 各向异性系数缩放因子(Pa)
-        self.c11 = 4.0 * self.scale_aniso   # 刚度系数(Pa)
-        self.c13 = 3.8 * self.scale_aniso   # 刚度系数(Pa)
-        self.c33 = 20.0 * self.scale_aniso  # 刚度系数(Pa)
-        self.c44 = 2.0 * self.scale_aniso   # 刚度系数(Pa)
+        self.c11 = 4.0e10   # 刚度系数(Pa)
+        self.c13 = 3.8e10   # 刚度系数(Pa)
+        self.c33 = 20.0e10  # 刚度系数(Pa)
+        self.c44 = 2.0e10   # 刚度系数(Pa)
         self.rho = 4000.0  # 密度(kg/m³)
         self.f0 = 200.0e3  # 震源主频(Hz)
         
