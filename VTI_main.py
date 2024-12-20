@@ -322,6 +322,10 @@ class SeismicCPML2DAniso:
             self.alpha_x_half = cp.where(mask_half, self.ALPHA_MAX_PML * (1.0 - abscissa_normalized_half), self.alpha_x_half)
         
         # 计算CPML更新系数
+        # 确保alpha值非负
+        self.alpha_x = cp.maximum(self.alpha_x, self.ZERO)
+        self.alpha_x_half = cp.maximum(self.alpha_x_half, self.ZERO)
+        
         # b系数：时间步长相关的衰减因子
         self.b_x = cp.exp(-(self.d_x / self.K_x + self.alpha_x) * self.DELTAT)
         self.b_x_half = cp.exp(-(self.d_x_half / self.K_x_half + self.alpha_x_half) * self.DELTAT)
@@ -617,7 +621,7 @@ class SeismicCPML2DAniso:
             raise ValueError('时间步长过大，模拟将不稳定')
         
         # 设置PML吸收边界
-        self.setup_pml_boundary_x()    # 设置x方向PML边界
+        self.setup_pml_boundary_x()  # 设置x方向PML边界
         self.setup_pml_boundary_y()  # 设置y方向PML边界
         
         # 时间步进主循环
