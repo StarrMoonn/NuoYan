@@ -365,28 +365,26 @@ class SeismicCPML2DAniso:
 
     def plot_seismograms(self):
         """Plot seismograms for all receivers"""
-        time = np.arange(self.NSTEP) * self.DELTAT
-        
         # Create figure
         plt.figure(figsize=(15, 10))
         
         # Plot horizontal component seismogram
         plt.subplot(211)
-        plt.imshow(self.seismogram_vx, aspect='auto', cmap='seismic',
-                  extent=[0, self.NREC-1, self.NSTEP*self.DELTAT*1000, 0])
+        plt.imshow(self.seismogram_vx, aspect='auto', cmap='gray',
+                  extent=[0, self.NREC-1, self.NSTEP, 0])
         plt.colorbar(label='Amplitude')
         plt.title('Horizontal Component Seismogram')
         plt.xlabel('Receiver number')
-        plt.ylabel('Time (ms)')
+        plt.ylabel('Time step (nt)')
         
         # Plot vertical component seismogram
         plt.subplot(212)
-        plt.imshow(self.seismogram_vz, aspect='auto', cmap='seismic',
-                  extent=[0, self.NREC-1, self.NSTEP*self.DELTAT*1000, 0])
+        plt.imshow(self.seismogram_vz, aspect='auto', cmap='gray',
+                  extent=[0, self.NREC-1, self.NSTEP, 0])
         plt.colorbar(label='Amplitude')
         plt.title('Vertical Component Seismogram')
         plt.xlabel('Receiver number')
-        plt.ylabel('Time (ms)')
+        plt.ylabel('Time step (nt)')
         
         plt.tight_layout()
         plt.savefig('seismograms.png')
