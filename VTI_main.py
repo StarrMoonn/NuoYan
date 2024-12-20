@@ -529,49 +529,52 @@ class SeismicCPML2DAniso:
         np.save('simulation_params.npy', params)
 
     def simulate(self):
-        """Run the main simulation"""
-        # Check Courant stability condition
-        quasi_cp_max = cp.maximum(cp.sqrt(self.c22/self.rho), cp.sqrt(self.c11/self.rho))
-        Courant_number = quasi_cp_max * self.DELTAT * cp.sqrt(1.0/self.DELTAX**2 + 1.0/self.DELTAY**2)
-        print(f'Courant number is {float(Courant_number)}')
+        """运行主模拟程序"""
+        # 检查Courant稳定性条件
+        quasi_cp_max = cp.maximum(cp.sqrt(self.c22/self.rho), cp.sqrt(self.c11/self.rho))  # 计算最大准P波速度
+        Courant_number = quasi_cp_max * self.DELTAT * cp.sqrt(1.0/self.DELTAX**2 + 1.0/self.DELTAY**2)  # 计算Courant数
+        print(f'Courant数为 {float(Courant_number)}')
         if Courant_number > 1.0:
-            raise ValueError('Time step is too large, simulation will be unstable')
+            raise ValueError('时间步长过大，模拟将不稳定')
         
-        # Setup PML boundaries
-        self.setup_pml_boundary()
-        self.setup_pml_boundary_y()
+        # 设置PML吸收边界
+        self.setup_pml_boundary()    # 设置x方向PML边界
+        self.setup_pml_boundary_y()  # 设置y方向PML边界
         
-        # Time stepping
+        # 时间步进主循环
         for it in range(1, self.NSTEP + 1):
+            # 每100步输出进度信息
             if it % 100 == 0:
-                print(f'Processing step {it}/{self.NSTEP}...')
+                print(f'正在处理时间步 {it}/{self.NSTEP}...')
             
-            # Compute stress sigma and update memory variables
+            # 计算应力分量并更新记忆变量
             self.compute_stress()
             
-            # Compute velocity and update memory variables
+            # 计算速度分量并更新记忆变量
             self.compute_velocity()
             
-            # Add source
+            # 添加震源
             self.add_source(it)
             
-            # Apply Dirichlet boundary conditions
+            # 应用Dirichlet边界条件（刚性边界）
             self.apply_boundary_conditions()
             
-            # Record seismograms
+            # 记录地震图
             self.record_seismograms(it)
             
-            # Output information
-            if it % self.IT_DISPLAY == 0 or it == 5:
+            # 输出信息和波场快照
+            if it % self.IT_DISPLAY == 0 or it == 5:  # 每IT_DISPLAY步或第5步输出
                 self.output_info(it)
         
-        # 保存地震记录
+        # 模拟结束后的数据处理
+        # 保存地震记录数据
         self.save_shot_records()
         
-        # 绘制地震记录
+        # 绘制并保存地震记录图像
         self.plot_seismograms()
-        print("\nEnd of the simulation")
+        print("\n模拟结束")
 
 if __name__ == '__main__':
-    simulator = SeismicCPML2DAniso()
-    simulator.simulate()
+    # 创建模拟器实例并运行模拟
+    simulator = SeismicCPML2DAniso()  # 实例化模拟器
+    simulator.simulate()              # 开始模拟
