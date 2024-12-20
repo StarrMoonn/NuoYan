@@ -334,6 +334,19 @@
 ! for stability estimate
   double precision :: quasi_cp_max,aniso_stability_criterion,aniso2,aniso3
 
+! Receiver parameters
+  integer, parameter :: NREC = 50                    ! number of receivers
+  integer, parameter :: first_rec_x = 100            ! first receiver x position
+  integer, parameter :: first_rec_y = 50             ! first receiver y position
+  integer, parameter :: rec_dx = 4                   ! receiver x spacing
+  integer, parameter :: rec_dy = 0                   ! receiver y spacing
+  
+! Arrays for seismograms
+  double precision, dimension(NSTEP,NREC) :: seismogram_vx, seismogram_vy
+
+! Arrays for receiver positions
+  integer, dimension(NREC) :: ix_rec, iy_rec
+
 !---
 !--- program starts here
 !---
@@ -611,6 +624,19 @@
   double precision, dimension(NX, NY, NSTEP) :: wavefield_vx, wavefield_vy
   double precision, dimension(NX, NY, NSTEP) :: wavefield_sigmaxx, wavefield_sigmayy
   
+  ! Initialize receiver positions
+  do i = 1,NREC
+    ix_rec(i) = first_rec_x + (i-1)*rec_dx
+    iy_rec(i) = first_rec_y + (i-1)*rec_dy
+    
+    ! Check if receivers are within the grid
+    if (ix_rec(i) < 1 .or. ix_rec(i) > NX .or. &
+        iy_rec(i) < 1 .or. iy_rec(i) > NY) then
+      print *, 'Error: receiver position outside grid'
+      stop
+    endif
+  enddo
+
   do it = 1,NSTEP
 
 !------------------------------------------------------------
@@ -748,6 +774,12 @@ close(13)
   vy(:,1) = ZERO
   vy(:,NY) = ZERO
 
+! Store seismogram data
+  do i = 1,NREC
+    seismogram_vx(it,i) = vx(ix_rec(i),iy_rec(i))
+    seismogram_vy(it,i) = vy(ix_rec(i),iy_rec(i))
+  enddo
+
 ! output information
   if(mod(it,IT_DISPLAY) == 0 .or. it == 5) then
 
@@ -773,5 +805,22 @@ close(13)
   print *,'End of the simulation'
   print *
 
+! Output seismogram data to files
+  open(unit=27,file='seismogram_vx.dat',status='unknown')
+  open(unit=28,file='seismogram_vy.dat',status='unknown')
+  
+  do it = 1,NSTEP
+    write(27,*) (seismogram_vx(it,i), i=1,NREC)
+    write(28,*) (seismogram_vy(it,i), i=1,NREC)
+  enddo
+  
+  close(27)
+  close(28)
+
+! Call Python script to plot seismograms
+call system('python plot_seismograms.py')
+
   end program seismic_CPML_2D_aniso
+
+
 
