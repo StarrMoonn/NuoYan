@@ -140,14 +140,15 @@ class SeismicCPML2DAniso:
         self.b_y_half = cp.zeros(self.NY, dtype=cp.float64)
 
     def setup_receivers(self):
-        """Setup receiver positions"""
+        """设置检波器位置"""
+        # 根据初始位置和间距计算每个检波器的坐标
         for i in range(self.NREC):
-            self.rec_x[i] = self.first_rec_x + i * self.rec_dx
-            self.rec_z[i] = self.first_rec_z + i * self.rec_dz
-            
-        # Check if receivers are within grid bounds
+            self.rec_x[i] = self.first_rec_x + i * self.rec_dx    # 计算x方向位置
+            self.rec_z[i] = self.first_rec_z + i * self.rec_dz    # 计算z方向位置
+        
+        # 检查检波器位置是否在计算网格范围内
         if np.any(self.rec_x >= self.NX) or np.any(self.rec_z >= self.NY):
-            raise ValueError("Receiver positions exceed grid dimensions")
+            raise ValueError("检波器位置超出了计算网格范围")
 
     def setup_pml_boundary(self):
         """设置PML边界条件并检查稳定性"""
@@ -185,14 +186,11 @@ class SeismicCPML2DAniso:
         # 设置反射系数（控制PML的吸收效果）
         Rcoef = cp.float64(0.001)
         
-        # 计算衰减系数d0
-        d0_y = -(self.NPOWER + 1) * quasi_cp_max * cp.log(Rcoef) / (2.0 * thickness_PML_y)
-        
         # 检查NPOWER值的有效性
         if self.NPOWER < 1:
             raise ValueError('NPOWER必须大于1')
         
-        # 计算 d0
+        # 计算衰减系数d0
         d0_y = -(self.NPOWER + 1) * quasi_cp_max * cp.log(Rcoef) / (2.0 * thickness_PML_y)
         print(f'd0_y = {d0_y}')
         
@@ -257,6 +255,87 @@ class SeismicCPML2DAniso:
         self.a_y_half = cp.where(mask_half,
                                 self.d_y_half * (self.b_y_half - 1.0) / (self.K_y_half * (self.d_y_half + self.K_y_half * self.alpha_y_half)),
                                 self.a_y_half)
+
+    def setup_pml_boundary_x(self):
+        """设置x方向的PML边界条件"""
+        # 计算准P波最大速度，用于d0计算
+        quasi_cp_max = cp.maximum(cp.sqrt(self.c22/self.rho), cp.sqrt(self.c11/self.rho))
+        
+        # 定义PML区域的吸收层厚度
+        thickness_PML_x = self.NPOINTS_PML * self.DELTAX
+        
+        # 设置反射系数（控制PML的吸收效果）
+        Rcoef = cp.float64(0.001)
+        
+        # 检查NPOWER值的有效性
+        if self.NPOWER < 1:
+            raise ValueError('NPOWER必须大于1')
+        
+        # 计算衰减系数d0
+        d0_x = -(self.NPOWER + 1) * quasi_cp_max * cp.log(Rcoef) / (2.0 * thickness_PML_x)
+        print(f'd0_x = {d0_x}')
+        
+        # 设置衰减区域的边界位置
+        xoriginleft = thickness_PML_x                           # 左边界位置
+        xoriginright = (self.NX-1)*self.DELTAX - thickness_PML_x  # 右边界位置
+        
+        # 创建x方向的网格点坐标数组
+        x_vals = cp.arange(self.NX, dtype=cp.float64) * self.DELTAX      # 整数网格点
+        x_vals_half = x_vals + self.DELTAX/2.0                           # 半网格点
+        
+        # 处理左边界PML
+        if self.USE_PML_XMIN:
+            # 计算在PML区域内的位置
+            abscissa_in_PML = xoriginleft - x_vals
+            mask = abscissa_in_PML >= 0.0
+            # 归一化位置（0到1之间）
+            abscissa_normalized = cp.where(mask, abscissa_in_PML / thickness_PML_x, 0.0)
+            
+            # 设置整数网格点的PML参数
+            self.d_x = cp.where(mask, d0_x * abscissa_normalized**self.NPOWER, self.d_x)           # 衰减函数
+            self.K_x = cp.where(mask, 1.0 + (self.K_MAX_PML - 1.0) * abscissa_normalized**self.NPOWER, self.K_x)  # 拉伸函数
+            self.alpha_x = cp.where(mask, self.ALPHA_MAX_PML * (1.0 - abscissa_normalized), self.alpha_x)  # 频率调制函数
+            
+            # 设置半网格点的PML参数
+            abscissa_in_PML_half = xoriginleft - x_vals_half
+            mask_half = abscissa_in_PML_half >= 0.0
+            abscissa_normalized_half = cp.where(mask_half, abscissa_in_PML_half / thickness_PML_x, 0.0)
+            self.d_x_half = cp.where(mask_half, d0_x * abscissa_normalized_half**self.NPOWER, self.d_x_half)
+            self.K_x_half = cp.where(mask_half, 1.0 + (self.K_MAX_PML - 1.0) * abscissa_normalized_half**self.NPOWER, self.K_x_half)
+            self.alpha_x_half = cp.where(mask_half, self.ALPHA_MAX_PML * (1.0 - abscissa_normalized_half), self.alpha_x_half)
+        
+        # 处理右边界PML
+        if self.USE_PML_XMAX:
+            abscissa_in_PML = x_vals - xoriginright
+            mask = abscissa_in_PML >= 0.0
+            abscissa_normalized = cp.where(mask, abscissa_in_PML / thickness_PML_x, 0.0)
+            # 设置PML参数
+            self.d_x = cp.where(mask, d0_x * abscissa_normalized**self.NPOWER, self.d_x)
+            self.K_x = cp.where(mask, 1.0 + (self.K_MAX_PML - 1.0) * abscissa_normalized**self.NPOWER, self.K_x)
+            self.alpha_x = cp.where(mask, self.ALPHA_MAX_PML * (1.0 - abscissa_normalized), self.alpha_x)
+            
+            abscissa_in_PML_half = x_vals_half - xoriginright
+            mask_half = abscissa_in_PML_half >= 0.0
+            abscissa_normalized_half = cp.where(mask_half, abscissa_in_PML_half / thickness_PML_x, 0.0)
+            self.d_x_half = cp.where(mask_half, d0_x * abscissa_normalized_half**self.NPOWER, self.d_x_half)
+            self.K_x_half = cp.where(mask_half, 1.0 + (self.K_MAX_PML - 1.0) * abscissa_normalized_half**self.NPOWER, self.K_x_half)
+            self.alpha_x_half = cp.where(mask_half, self.ALPHA_MAX_PML * (1.0 - abscissa_normalized_half), self.alpha_x_half)
+        
+        # 计算CPML更新系数
+        # b系数：时间步长相关的衰减因子
+        self.b_x = cp.exp(-(self.d_x / self.K_x + self.alpha_x) * self.DELTAT)
+        self.b_x_half = cp.exp(-(self.d_x_half / self.K_x_half + self.alpha_x_half) * self.DELTAT)
+        
+        # a系数：CPML递归公式中的系数
+        mask = cp.abs(self.d_x) > 1.0e-6
+        self.a_x = cp.where(mask,
+                           self.d_x * (self.b_x - 1.0) / (self.K_x * (self.d_x + self.K_x * self.alpha_x)),
+                           self.a_x)
+        
+        mask_half = cp.abs(self.d_x_half) > 1.0e-6
+        self.a_x_half = cp.where(mask_half,
+                                self.d_x_half * (self.b_x_half - 1.0) / (self.K_x_half * (self.d_x_half + self.K_x_half * self.alpha_x_half)),
+                                self.a_x_half)
 
     def compute_stress(self):
         """计算应力分量并更新记忆变量"""
@@ -538,7 +617,7 @@ class SeismicCPML2DAniso:
             raise ValueError('时间步长过大，模拟将不稳定')
         
         # 设置PML吸收边界
-        self.setup_pml_boundary()    # 设置x方向PML边界
+        self.setup_pml_boundary_x()    # 设置x方向PML边界
         self.setup_pml_boundary_y()  # 设置y方向PML边界
         
         # 时间步进主循环
