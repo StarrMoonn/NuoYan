@@ -10,15 +10,15 @@ class SeismicCPML2DAniso:
         self.NY = 401  # 垂直方向网格点数
         
         # 网格间距
-        self.DELTAX = 10  # 水平方向网格间距(m)
-        self.DELTAY = self.DELTAX  # 垂直方向网格间距(m)
+        self.DELTAX = 0.0625e-2 # 水平方向网格间距(m)
+        self.DELTAY = 0.0625e-2  # 垂直方向网格间距(m)
         
         # PML边界参数设置
         self.USE_PML_XMIN = True  # 是否使用左边界PML层
         self.USE_PML_XMAX = True  # 是否使用右边界PML层
         self.USE_PML_YMIN = True  # 是否使用上边界PML层
         self.USE_PML_YMAX = True  # 是否使用下边界PML层
-        self.NPOINTS_PML = 10     # PML层的厚度(网格点数)
+        self.NPOINTS_PML = 100     # PML层的厚度(网格点数)
         
         # 材料属性参数 (来自Becache, Fauqueux和Joly的模型I)
         self.c11 = 4.0e10   # 刚度系数(Pa)
@@ -29,14 +29,14 @@ class SeismicCPML2DAniso:
         self.f0 = 200.0e3  # 震源主频(Hz)
         
         # 时间步进参数
-        self.NSTEP = 1001      # 总时间步数
-        self.DELTAT = 0.0005 # 时间步长(s)
+        self.NSTEP = 3000      # 总时间步数
+        self.DELTAT = 50.e-9 # 时间步长(s)
         
         # 震源参数
         self.t0 = 1.20/self.f0  # 时间延迟(s)
         self.factor = 1.0e7     # 震源强度因子
-        self.ISOURCE = self.NX // 2  # 震源x方向位置(网格点)
-        self.JSOURCE = self.NY // 2  # 震源y方向位置(网格点)
+        self.ISOURCE = 200  # 震源x方向位置(网格点)
+        self.JSOURCE = 50  # 震源y方向位置(网格点)
         self.xsource = (self.ISOURCE - 1) * self.DELTAX  # 震源x坐标(m)
         self.ysource = (self.JSOURCE - 1) * self.DELTAY  # 震源y坐标(m)
         self.ANGLE_FORCE = 0.0  # 震源力的方向角(度)
@@ -57,7 +57,7 @@ class SeismicCPML2DAniso:
         self.seismogram_vz = np.zeros((self.NSTEP, self.NREC))  # z方向速度记录
         
         # 显示参数
-        self.IT_DISPLAY = 100  # 每隔多少步显示一次结果
+        self.IT_DISPLAY = 500  # 每隔多少步显示一次结果
         
         # 常量定义
         self.PI = cp.pi  # 圆周率
@@ -397,41 +397,52 @@ class SeismicCPML2DAniso:
 
     def plot_seismograms(self):
         """绘制并保存所有检波器的地震记录图
-        
+    
         功能:
         1. 创建水平和垂直分量的地震记录图
-        2. 设置适当的图像参数和标签
-        3. 将图像保存到输出目录
+        2. 使用灰度配色方案
+        3. 优化显示效果以突出主要波形特征
         """
-        # 计算时间轴数组
-        time = np.arange(self.NSTEP) * self.DELTAT
-        
         # 创建图形对象，设置图像大小
         plt.figure(figsize=(15, 10))
         
+        # 数据归一化处理
+        vx_norm = self.seismogram_vx / np.max(np.abs(self.seismogram_vx))
+        vz_norm = self.seismogram_vz / np.max(np.abs(self.seismogram_vz))
+        
         # 绘制水平分量地震记录
-        plt.subplot(211)  # 创建上半部分子图
-        plt.imshow(self.seismogram_vx, aspect='auto', cmap='seismic',
-                  extent=[0, self.NREC-1, self.NSTEP*self.DELTAT*1000, 0])  # 绘制地震记录
-        plt.colorbar(label='Amplitude')  # 添加颜色条
-        plt.title('Horizontal Component Seismogram')  # 设置标题
-        plt.xlabel('Receiver number')  # x轴标签
-        plt.ylabel('Time (ms)')  # y轴标签
+        plt.subplot(211)
+        plt.imshow(vx_norm, aspect='auto', cmap='gray_r',  # 使用反转灰度图
+                  extent=[1, self.NREC, self.NSTEP, 1],
+                  vmin=-0.3, vmax=0.3)  # 调整对比度
+        plt.colorbar(label='Normalized Amplitude')
+        plt.title('Horizontal Component Seismogram')
+        plt.xlabel('Receiver Number')
+        plt.ylabel('Time Step')
+        
+        # 设置刻度间隔
+        plt.xticks(np.linspace(1, self.NREC, 10, dtype=int))
+        plt.yticks(np.linspace(1, self.NSTEP, 10, dtype=int))
         
         # 绘制垂直分量地震记录
-        plt.subplot(212)  # 创建下半部分子图
-        plt.imshow(self.seismogram_vz, aspect='auto', cmap='seismic',
-                  extent=[0, self.NREC-1, self.NSTEP*self.DELTAT*1000, 0])  # 绘制地震记录
-        plt.colorbar(label='Amplitude')  # 添加颜色条
-        plt.title('Vertical Component Seismogram')  # 设置标题
-        plt.xlabel('Receiver number')  # x轴标签
-        plt.ylabel('Time (ms)')  # y轴标签
+        plt.subplot(212)
+        plt.imshow(vz_norm, aspect='auto', cmap='gray_r',  # 使用反转灰度图
+                  extent=[1, self.NREC, self.NSTEP, 1],
+                  vmin=-0.3, vmax=0.3)  # 调整对比度
+        plt.colorbar(label='Normalized Amplitude')
+        plt.title('Vertical Component Seismogram')
+        plt.xlabel('Receiver Number')
+        plt.ylabel('Time Step')
+        
+        # 设置刻度间隔
+        plt.xticks(np.linspace(1, self.NREC, 10, dtype=int))
+        plt.yticks(np.linspace(1, self.NSTEP, 10, dtype=int))
         
         # 调整子图布局
         plt.tight_layout()
         
         # 将地震记录图保存到输出目录
-        plt.savefig(os.path.join(self.output_dir, 'seismograms.png'))
+        plt.savefig(os.path.join(self.output_dir, 'seismograms.png'), dpi=300)
         
         # 关闭图形，释放内存
         plt.close()
