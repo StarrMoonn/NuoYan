@@ -139,6 +139,27 @@ class SeismicCPML2DAniso:
         self.b_y = cp.zeros(self.NY, dtype=cp.float64)
         self.b_y_half = cp.zeros(self.NY, dtype=cp.float64)
 
+    def add_source(self, it):
+        """添加震源（在指定网格点处添加力矢量）"""
+        # 计算高斯函数的参数
+        a = self.PI * self.PI * self.f0 * self.f0    # 高斯函数的频率参数
+        t = (it-1) * self.DELTAT                     # 当前时刻
+        
+        # 计算高斯函数的一阶导数作为震源时间函数
+        source_term = -self.factor * 2.0 * a * (t-self.t0) * cp.exp(-a*(t-self.t0)**2)
+        
+        # 根据震源角度分解力矢量到x和y方向
+        force_x = cp.sin(self.ANGLE_FORCE * self.DEGREES_TO_RADIANS) * source_term  # x方向分量
+        force_y = cp.cos(self.ANGLE_FORCE * self.DEGREES_TO_RADIANS) * source_term  # y方向分量
+        
+        # 获取震源位置
+        i = self.ISOURCE  # 震源x坐标
+        j = self.JSOURCE  # 震源y坐标
+        
+        # 将力添加到速度场中
+        self.vx[i,j] += force_x * self.DELTAT / self.rho  # 更新x方向速度
+        self.vy[i,j] += force_y * self.DELTAT / self.rho  # 更新y方向速度
+        
     def setup_receivers(self):
         """设置检波器位置"""
         # 根据初始位置和间距计算每个检波器的坐标
@@ -174,87 +195,6 @@ class SeismicCPML2DAniso:
         if aniso3 > 0.0 and (self.USE_PML_XMIN or self.USE_PML_XMAX or 
                              self.USE_PML_YMIN or self.USE_PML_YMAX):
             print('警告：对于该各向异性材料，PML模型在条件3下在数学上本质上不稳定')
-
-    def setup_pml_boundary_y(self):
-        """设置y方向的PML边界条件"""
-        # 计算准P波最大速度，用于d0计算
-        quasi_cp_max = cp.maximum(cp.sqrt(self.c22/self.rho), cp.sqrt(self.c11/self.rho))
-        
-        # 定义PML区域的吸收层厚度
-        thickness_PML_y = self.NPOINTS_PML * self.DELTAY
-        
-        # 设置反射系数（控制PML的吸收效果）
-        Rcoef = cp.float64(0.001)
-        
-        # 检查NPOWER值的有效性
-        if self.NPOWER < 1:
-            raise ValueError('NPOWER必须大于1')
-        
-        # 计算衰减系数d0
-        d0_y = -(self.NPOWER + 1) * quasi_cp_max * cp.log(Rcoef) / (2.0 * thickness_PML_y)
-        print(f'd0_y = {d0_y}')
-        
-        # 设置衰减区域的边界位置
-        yoriginleft = thickness_PML_y                           # 左边界位置
-        yoriginright = (self.NY-1)*self.DELTAY - thickness_PML_y  # 右边界位置
-        
-        # 创建y方向的网格点坐标数组
-        y_vals = cp.arange(self.NY, dtype=cp.float64) * self.DELTAY      # 整数网格点
-        y_vals_half = y_vals + self.DELTAY/2.0                           # 半网格点
-        
-        # 处理左边界PML
-        if self.USE_PML_YMIN:
-            # 计算在PML区域内的位置
-            abscissa_in_PML = yoriginleft - y_vals
-            mask = abscissa_in_PML >= 0.0
-            # 归一化位置（0到1之间）
-            abscissa_normalized = cp.where(mask, abscissa_in_PML / thickness_PML_y, 0.0)
-            
-            # 设置整数网格点的PML参数
-            self.d_y = cp.where(mask, d0_y * abscissa_normalized**self.NPOWER, self.d_y)           # 衰减函数
-            self.K_y = cp.where(mask, 1.0 + (self.K_MAX_PML - 1.0) * abscissa_normalized**self.NPOWER, self.K_y)  # 拉伸函数
-            self.alpha_y = cp.where(mask, self.ALPHA_MAX_PML * (1.0 - abscissa_normalized), self.alpha_y)  # 频率调制函数
-            
-            # 设置半网格点的PML参数
-            abscissa_in_PML_half = yoriginleft - y_vals_half
-            mask_half = abscissa_in_PML_half >= 0.0
-            abscissa_normalized_half = cp.where(mask_half, abscissa_in_PML_half / thickness_PML_y, 0.0)
-            self.d_y_half = cp.where(mask_half, d0_y * abscissa_normalized_half**self.NPOWER, self.d_y_half)
-            self.K_y_half = cp.where(mask_half, 1.0 + (self.K_MAX_PML - 1.0) * abscissa_normalized_half**self.NPOWER, self.K_y_half)
-            self.alpha_y_half = cp.where(mask_half, self.ALPHA_MAX_PML * (1.0 - abscissa_normalized_half), self.alpha_y_half)
-        
-        # 处理右边界PML（与左边界类似）
-        if self.USE_PML_YMAX:
-            abscissa_in_PML = y_vals - yoriginright
-            mask = abscissa_in_PML >= 0.0
-            abscissa_normalized = cp.where(mask, abscissa_in_PML / thickness_PML_y, 0.0)
-            # 设置PML参数（与左边界相同的处理方式）
-            self.d_y = cp.where(mask, d0_y * abscissa_normalized**self.NPOWER, self.d_y)
-            self.K_y = cp.where(mask, 1.0 + (self.K_MAX_PML - 1.0) * abscissa_normalized**self.NPOWER, self.K_y)
-            self.alpha_y = cp.where(mask, self.ALPHA_MAX_PML * (1.0 - abscissa_normalized), self.alpha_y)
-            
-            abscissa_in_PML_half = y_vals_half - yoriginright
-            mask_half = abscissa_in_PML_half >= 0.0
-            abscissa_normalized_half = cp.where(mask_half, abscissa_in_PML_half / thickness_PML_y, 0.0)
-            self.d_y_half = cp.where(mask_half, d0_y * abscissa_normalized_half**self.NPOWER, self.d_y_half)
-            self.K_y_half = cp.where(mask_half, 1.0 + (self.K_MAX_PML - 1.0) * abscissa_normalized_half**self.NPOWER, self.K_y_half)
-            self.alpha_y_half = cp.where(mask_half, self.ALPHA_MAX_PML * (1.0 - abscissa_normalized_half), self.alpha_y_half)
-        
-        # 计算CPML更新系数
-        # b系数：时间步长相关的衰减因子
-        self.b_y = cp.exp(-(self.d_y / self.K_y + self.alpha_y) * self.DELTAT)
-        self.b_y_half = cp.exp(-(self.d_y_half / self.K_y_half + self.alpha_y_half) * self.DELTAT)
-        
-        # a系数：CPML递归公式中的系数
-        mask = cp.abs(self.d_y) > 1.0e-6
-        self.a_y = cp.where(mask,
-                           self.d_y * (self.b_y - 1.0) / (self.K_y * (self.d_y + self.K_y * self.alpha_y)),
-                           self.a_y)
-        
-        mask_half = cp.abs(self.d_y_half) > 1.0e-6
-        self.a_y_half = cp.where(mask_half,
-                                self.d_y_half * (self.b_y_half - 1.0) / (self.K_y_half * (self.d_y_half + self.K_y_half * self.alpha_y_half)),
-                                self.a_y_half)
 
     def setup_pml_boundary_x(self):
         """设置x方向的PML边界条件"""
@@ -340,6 +280,101 @@ class SeismicCPML2DAniso:
         self.a_x_half = cp.where(mask_half,
                                 self.d_x_half * (self.b_x_half - 1.0) / (self.K_x_half * (self.d_x_half + self.K_x_half * self.alpha_x_half)),
                                 self.a_x_half)
+        
+    def setup_pml_boundary_y(self):
+        """设置y方向的PML边界条件"""
+        # 计算准P波最大速度，用于d0计算
+        quasi_cp_max = cp.maximum(cp.sqrt(self.c22/self.rho), cp.sqrt(self.c11/self.rho))
+        
+        # 定义PML区域的吸收层厚度
+        thickness_PML_y = self.NPOINTS_PML * self.DELTAY
+        
+        # 设置反射系数（控制PML的吸收效果）
+        Rcoef = cp.float64(0.001)
+        
+        # 检查NPOWER值的有效性
+        if self.NPOWER < 1:
+            raise ValueError('NPOWER必须大于1')
+        
+        # 计算衰减系数d0
+        d0_y = -(self.NPOWER + 1) * quasi_cp_max * cp.log(Rcoef) / (2.0 * thickness_PML_y)
+        print(f'd0_y = {d0_y}')
+        
+        # 设置衰减区域的边界位置
+        yoriginleft = thickness_PML_y                           # 左边界位置
+        yoriginright = (self.NY-1)*self.DELTAY - thickness_PML_y  # 右边界位置
+        
+        # 创建y方向的网格点坐标数组
+        y_vals = cp.arange(self.NY, dtype=cp.float64) * self.DELTAY      # 整数网格点
+        y_vals_half = y_vals + self.DELTAY/2.0                           # 半网格点
+        
+        # 处理左边界PML
+        if self.USE_PML_YMIN:
+            # 计算在PML区域内的位置
+            abscissa_in_PML = yoriginleft - y_vals
+            mask = abscissa_in_PML >= 0.0
+            # 归一化位置（0到1之间）
+            abscissa_normalized = cp.where(mask, abscissa_in_PML / thickness_PML_y, 0.0)
+            
+            # 设置整数网格点的PML参数
+            self.d_y = cp.where(mask, d0_y * abscissa_normalized**self.NPOWER, self.d_y)           # 衰减函数
+            self.K_y = cp.where(mask, 1.0 + (self.K_MAX_PML - 1.0) * abscissa_normalized**self.NPOWER, self.K_y)  # 拉伸函数
+            self.alpha_y = cp.where(mask, self.ALPHA_MAX_PML * (1.0 - abscissa_normalized), self.alpha_y)  # 频率调制函数
+            
+            # 设置半网格点的PML参数
+            abscissa_in_PML_half = yoriginleft - y_vals_half
+            mask_half = abscissa_in_PML_half >= 0.0
+            abscissa_normalized_half = cp.where(mask_half, abscissa_in_PML_half / thickness_PML_y, 0.0)
+            self.d_y_half = cp.where(mask_half, d0_y * abscissa_normalized_half**self.NPOWER, self.d_y_half)
+            self.K_y_half = cp.where(mask_half, 1.0 + (self.K_MAX_PML - 1.0) * abscissa_normalized_half**self.NPOWER, self.K_y_half)
+            self.alpha_y_half = cp.where(mask_half, self.ALPHA_MAX_PML * (1.0 - abscissa_normalized_half), self.alpha_y_half)
+        
+        # 处理右边界PML（与左边界类似）
+        if self.USE_PML_YMAX:
+            abscissa_in_PML = y_vals - yoriginright
+            mask = abscissa_in_PML >= 0.0
+            abscissa_normalized = cp.where(mask, abscissa_in_PML / thickness_PML_y, 0.0)
+            # 设置PML参数（与左边界相同的处理方式）
+            self.d_y = cp.where(mask, d0_y * abscissa_normalized**self.NPOWER, self.d_y)
+            self.K_y = cp.where(mask, 1.0 + (self.K_MAX_PML - 1.0) * abscissa_normalized**self.NPOWER, self.K_y)
+            self.alpha_y = cp.where(mask, self.ALPHA_MAX_PML * (1.0 - abscissa_normalized), self.alpha_y)
+            
+            abscissa_in_PML_half = y_vals_half - yoriginright
+            mask_half = abscissa_in_PML_half >= 0.0
+            abscissa_normalized_half = cp.where(mask_half, abscissa_in_PML_half / thickness_PML_y, 0.0)
+            self.d_y_half = cp.where(mask_half, d0_y * abscissa_normalized_half**self.NPOWER, self.d_y_half)
+            self.K_y_half = cp.where(mask_half, 1.0 + (self.K_MAX_PML - 1.0) * abscissa_normalized_half**self.NPOWER, self.K_y_half)
+            self.alpha_y_half = cp.where(mask_half, self.ALPHA_MAX_PML * (1.0 - abscissa_normalized_half), self.alpha_y_half)
+        
+        # 计算CPML更新系数
+        # b系数：时间步长相关的衰减因子
+        self.b_y = cp.exp(-(self.d_y / self.K_y + self.alpha_y) * self.DELTAT)
+        self.b_y_half = cp.exp(-(self.d_y_half / self.K_y_half + self.alpha_y_half) * self.DELTAT)
+        
+        # a系数：CPML递归公式中的系数
+        mask = cp.abs(self.d_y) > 1.0e-6
+        self.a_y = cp.where(mask,
+                           self.d_y * (self.b_y - 1.0) / (self.K_y * (self.d_y + self.K_y * self.alpha_y)),
+                           self.a_y)
+        
+        mask_half = cp.abs(self.d_y_half) > 1.0e-6
+        self.a_y_half = cp.where(mask_half,
+                                self.d_y_half * (self.b_y_half - 1.0) / (self.K_y_half * (self.d_y_half + self.K_y_half * self.alpha_y_half)),
+                                self.a_y_half)
+        
+    def apply_boundary_conditions(self):
+        """应用Dirichlet边界条件（刚性边界）"""
+        # 设置x方向速度边界条件
+        self.vx[0,:] = self.ZERO    # 左边界
+        self.vx[-1,:] = self.ZERO   # 右边界
+        self.vx[:,0] = self.ZERO    # 下边界
+        self.vx[:,-1] = self.ZERO   # 上边界
+        
+        # 设置y方向速度边界条件
+        self.vy[0,:] = self.ZERO    # 左边界
+        self.vy[-1,:] = self.ZERO   # 右边界
+        self.vy[:,0] = self.ZERO    # 下边界
+        self.vy[:,-1] = self.ZERO   # 上边界
 
     def compute_stress(self):
         """计算应力分量并更新记忆变量"""
@@ -418,27 +453,6 @@ class SeismicCPML2DAniso:
         # 更新y方向速度分量
         self.vy[:-1,:-1] += (value_dsigmaxy_dx + value_dsigmayy_dy) * self.DELTAT / self.rho
 
-    def add_source(self, it):
-        """添加震源（在指定网格点处添加力矢量）"""
-        # 计算高斯函数的参数
-        a = self.PI * self.PI * self.f0 * self.f0    # 高斯函数的频率参数
-        t = (it-1) * self.DELTAT                     # 当前时刻
-        
-        # 计算高斯函数的一阶导数作为震源时间函数
-        source_term = -self.factor * 2.0 * a * (t-self.t0) * cp.exp(-a*(t-self.t0)**2)
-        
-        # 根据震源角度分解力矢量到x和y方向
-        force_x = cp.sin(self.ANGLE_FORCE * self.DEGREES_TO_RADIANS) * source_term  # x方向分量
-        force_y = cp.cos(self.ANGLE_FORCE * self.DEGREES_TO_RADIANS) * source_term  # y方向分量
-        
-        # 获取震源位置
-        i = self.ISOURCE  # 震源x坐标
-        j = self.JSOURCE  # 震源y坐标
-        
-        # 将力添加到速度场中
-        self.vx[i,j] += force_x * self.DELTAT / self.rho  # 更新x方向速度
-        self.vy[i,j] += force_y * self.DELTAT / self.rho  # 更新y方向速度
-
     def record_seismograms(self, it):
         """在检波器位置记录地震图数据"""
         # 将数据从GPU移动到CPU以进行记录
@@ -450,20 +464,6 @@ class SeismicCPML2DAniso:
             # 记录水平和垂直分量的速度
             self.seismogram_vx[it-1, i] = vx_cpu[self.rec_x[i], self.rec_z[i]]  # 记录x分量
             self.seismogram_vz[it-1, i] = vy_cpu[self.rec_x[i], self.rec_z[i]]  # 记录y分量
-
-    def apply_boundary_conditions(self):
-        """应用Dirichlet边界条件（刚性边界）"""
-        # 设置x方向速度边界条件
-        self.vx[0,:] = self.ZERO    # 左边界
-        self.vx[-1,:] = self.ZERO   # 右边界
-        self.vx[:,0] = self.ZERO    # 下边界
-        self.vx[:,-1] = self.ZERO   # 上边界
-        
-        # 设置y方向速度边界条件
-        self.vy[0,:] = self.ZERO    # 左边界
-        self.vy[-1,:] = self.ZERO   # 右边界
-        self.vy[:,0] = self.ZERO    # 下边界
-        self.vy[:,-1] = self.ZERO   # 上边界
 
     def output_info(self, it):
         """输出模拟状态信息和波场快照"""
@@ -517,76 +517,81 @@ class SeismicCPML2DAniso:
         plt.close()  # 关闭图形窗口释放内存
 
     def create_color_image(self, image_data_2D, it, field_number):
-        """Create a color image of a given vector component"""
-        # Parameters for visualization
-        POWER_DISPLAY = 0.30  # non linear display to enhance small amplitudes
-        cutvect = 0.01       # amplitude threshold above which we draw the color point
-        WHITE_BACKGROUND = True
-        width_cross = 5      # size of cross and square in pixels
-        thickness_cross = 1
+        """创建波场分量的彩色可视化图像
         
-        # Create figure name based on field number
+        参数:
+            image_data_2D: 2D数组，包含要可视化的波场数据
+            it: 整数，当前时间步
+            field_number: 整数，1表示Vx分量，2表示Vy分量
+        """
+        # 可视化参数设置
+        POWER_DISPLAY = 0.30  # 非线性显示指数，用于增强小振幅的显示效果
+        cutvect = 0.01       # 振幅阈值，低于此值的点将使用背景色
+        WHITE_BACKGROUND = True  # 背景色选择：True为白色，False为黑色
+        width_cross = 5      # 震源标记十字的宽度(像素)
+        thickness_cross = 1  # 震源标记十字的粗细(像素)
+        
+        # 根据field_number确定输出文件名
         if field_number == 1:
-            field_name = 'Vx'
+            field_name = 'Vx'  # x方向速度分量
         else:
-            field_name = 'Vy'
+            field_name = 'Vy'  # y方向速度分量
         
+        # 生成输出文件名，格式为"imageXXXXXX_Vx/y.png"
         fig_name = f'image{it:06d}_{field_name}.png'
         
-        # Compute maximum amplitude
+        # 计算波场的最大绝对振幅，用于归一化
         max_amplitude = np.max(np.abs(image_data_2D))
         
-        # Create RGB array for image
+        # 创建RGB图像数组，维度为(NY, NX, 3)
         img = np.zeros((self.NY, self.NX, 3))
         
-        # Fill the image array
-        for iy in range(self.NY-1, -1, -1):
-            for ix in range(self.NX):
-                # Normalize value to [-1,1]
+        # 逐点填充图像数组
+        for iy in range(self.NY-1, -1, -1):  # 从上到下遍历
+            for ix in range(self.NX):         # 从左到右遍历
+                # 将数值归一化到[-1,1]范围
                 normalized_value = image_data_2D[ix,iy] / max_amplitude
+                normalized_value = np.clip(normalized_value, -1.0, 1.0)  # 限制在[-1,1]范围内
                 
-                # Clip values to [-1,1]
-                normalized_value = np.clip(normalized_value, -1.0, 1.0)
-                
-                # Draw source location
+                # 绘制震源位置（橙色十字）
                 if ((ix >= self.ISOURCE - width_cross and ix <= self.ISOURCE + width_cross and 
                      iy >= self.JSOURCE - thickness_cross and iy <= self.JSOURCE + thickness_cross) or
                     (ix >= self.ISOURCE - thickness_cross and ix <= self.ISOURCE + thickness_cross and
                      iy >= self.JSOURCE - width_cross and iy <= self.JSOURCE + width_cross)):
-                    img[iy,ix] = [1.0, 0.616, 0.0]  # Orange
+                    img[iy,ix] = [1.0, 0.616, 0.0]  # 橙色
                 
-                # Draw frame
+                # 绘制边框（黑色）
                 elif ix <= 1 or ix >= self.NX-2 or iy <= 1 or iy >= self.NY-2:
-                    img[iy,ix] = [0.0, 0.0, 0.0]  # Black
+                    img[iy,ix] = [0.0, 0.0, 0.0]  # 黑色
                 
-                # Draw PML boundaries
+                # 绘制PML边界（橙黄色）
                 elif ((self.USE_PML_XMIN and ix == self.NPOINTS_PML) or
                       (self.USE_PML_XMAX and ix == self.NX - self.NPOINTS_PML) or
                       (self.USE_PML_YMIN and iy == self.NPOINTS_PML) or
                       (self.USE_PML_YMAX and iy == self.NY - self.NPOINTS_PML)):
-                    img[iy,ix] = [1.0, 0.588, 0.0]  # Orange-yellow
+                    img[iy,ix] = [1.0, 0.588, 0.0]  # 橙黄色
                 
-                # Draw receivers
+                # 绘制检波器位置（绿色）
                 elif any((ix == rx and iy == rz) for rx, rz in zip(self.rec_x, self.rec_z)):
-                    img[iy,ix] = [0.0, 1.0, 0.0]  # Green
+                    img[iy,ix] = [0.0, 1.0, 0.0]  # 绿色
                 
-                # Values below threshold
+                # 处理低于阈值的点
                 elif abs(image_data_2D[ix,iy]) <= max_amplitude * cutvect:
                     if WHITE_BACKGROUND:
-                        img[iy,ix] = [1.0, 1.0, 1.0]  # White
+                        img[iy,ix] = [1.0, 1.0, 1.0]  # 白色背景
                     else:
-                        img[iy,ix] = [0.0, 0.0, 0.0]  # Black
+                        img[iy,ix] = [0.0, 0.0, 0.0]  # 黑色背景
                 
-                # Regular points
+                # 处理正常波场值
                 else:
                     if normalized_value >= 0.0:
-                        # Red for positive values
+                        # 正值用红色表示，强度随值变化
                         img[iy,ix] = [normalized_value**POWER_DISPLAY, 0.0, 0.0]
                     else:
-                        # Blue for negative values
+                        # 负值用蓝色表示，强度随值变化
                         img[iy,ix] = [0.0, 0.0, abs(normalized_value)**POWER_DISPLAY]
         
-        # Save the image
+        # 保存图像为PNG文件
         plt.imsave(fig_name, img)
 
     def save_shot_records(self):
