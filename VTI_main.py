@@ -92,6 +92,12 @@ class SeismicCPML2DAniso:
         # 第二维 (NSTEP): 时间采样点
         # 第三维 (NREC):  检波器通道数
 
+        # 添加输出目录设置
+        self.output_dir = 'output'
+        # 创建输出目录
+        if not os.path.exists(self.output_dir):
+            os.makedirs(self.output_dir)
+
     def initialize_arrays(self):
         """初始化模拟所需的所有GPU数组"""
         # 主要场变量数组
@@ -513,7 +519,7 @@ class SeismicCPML2DAniso:
         
         # 调整布局并保存图像
         plt.tight_layout()  # 自动调整子图之间的间距
-        plt.savefig('seismograms.png')  # 保存为PNG文件
+        plt.savefig(os.path.join(self.output_dir, 'seismograms.png'))  # 保存到output目录
         plt.close()  # 关闭图形窗口释放内存
 
     def create_color_image(self, image_data_2D, it, field_number):
@@ -539,6 +545,9 @@ class SeismicCPML2DAniso:
         
         # 生成输出文件名，格式为"imageXXXXXX_Vx/y.png"
         fig_name = f'image{it:06d}_{field_name}.png'
+        
+        # 直接使用self.output_dir作为输出路径
+        fig_name = os.path.join(self.output_dir, fig_name)
         
         # 计算波场的最大绝对振幅，用于归一化
         max_amplitude = np.max(np.abs(image_data_2D))
@@ -596,13 +605,13 @@ class SeismicCPML2DAniso:
 
     def save_shot_records(self):
         """保存多炮地震记录"""
-        # 当前实现是单炮记录
+        # 当前现是单炮记录
         self.shot_records_vx[0] = self.seismogram_vx  # shape: (NSTEP, NREC)
         self.shot_records_vz[0] = self.seismogram_vz  # shape: (NSTEP, NREC)
         
         # 保存为numpy数组文件
-        np.save('shot_records_vx.npy', self.shot_records_vx)
-        np.save('shot_records_vz.npy', self.shot_records_vz)
+        np.save(os.path.join(self.output_dir, 'shot_records_vx.npy'), self.shot_records_vx)
+        np.save(os.path.join(self.output_dir, 'shot_records_vz.npy'), self.shot_records_vz)
         
         # 保存参数信息
         params = {
@@ -614,7 +623,7 @@ class SeismicCPML2DAniso:
             'source_positions': [(self.ISOURCE, self.JSOURCE)],  # 震源位置
             'receiver_positions': list(zip(self.rec_x, self.rec_z))  # 检波器位置
         }
-        np.save('simulation_params.npy', params)
+        np.save(os.path.join(self.output_dir, 'simulation_params.npy'), params)
 
     def simulate(self):
         """运行主模拟程序"""
