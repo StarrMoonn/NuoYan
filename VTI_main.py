@@ -31,7 +31,7 @@ class SeismicCPML2DAniso:
         self.f0 = 200.0e3             # 震源主频(Hz)
         
         # 时间步进参数
-        self.NSTEP = 3000             # 总时间步数
+        self.NSTEP = 500             # 总时间步数
         self.DELTAT = 50.0e-9         # 时间步长(s)
         
         # 震源参数设置
@@ -113,7 +113,7 @@ class SeismicCPML2DAniso:
         # 创建两个三维数组来存储多炮记录
         # 维度: (炮点数, 时间步数, 检波器数)
         self.shot_records_vx = np.zeros((self.NSHOT, self.NSTEP, self.NREC))
-        self.shot_records_vz = np.zeros((self.NSHOT, self.NSTEP, self.NREC))
+        self.shot_records_vy = np.zeros((self.NSHOT, self.NSTEP, self.NREC))
         
         # 数组维度说明:
         # 第一维 (NSHOT): 不同的炮点位置
@@ -173,8 +173,13 @@ class SeismicCPML2DAniso:
         self.b_y = cp.zeros(self.NY, dtype=cp.float64)
         self.b_y_half = cp.zeros(self.NY, dtype=cp.float64)
 
-    def add_source(self, it):
-        """添加多个震源（在指定网格点处添加力矢量）"""
+    def add_source(self, it, source):
+        """添加单个震源（在指定网格点处添加力矢量）
+    
+        Args:
+            it: 当前时间步
+            source: 当前震源的参数（从self.sources中提取的字典）
+        """
         # 计算高斯函数的参数
         a = self.PI * self.PI * self.f0 * self.f0    # 高斯函数的频率参数
         t = (it-1) * self.DELTAT                     # 当前时刻
@@ -187,17 +192,12 @@ class SeismicCPML2DAniso:
         force_y = cp.cos(self.ANGLE_FORCE * self.DEGREES_TO_RADIANS) * source_term  # y方向分量
         
         # 获取震源位置
-        # i = self.ISOURCE  # 震源x坐标
-        # j = self.JSOURCE  # 震源y坐标
-
-        # 对每个震源位置添加力
-        for source in self.sources:
-            i = source['ISOURCE']
-            j = source['JSOURCE']
+        i = source['ISOURCE']
+        j = source['JSOURCE']
         
-            # 将力添加到速度场中
-            self.vx[i,j] += force_x * self.DELTAT / self.rho  # 更新x方向速度
-            self.vy[i,j] += force_y * self.DELTAT / self.rho  # 更新y方向速度
+        # 将力添加到速度场中
+        self.vx[i,j] += force_x * self.DELTAT / self.rho  # 更新x方向速度
+        self.vy[i,j] += force_y * self.DELTAT / self.rho  # 更新y方向速度
         
     def setup_receivers(self):
         """设置检波器位置"""
@@ -492,17 +492,17 @@ class SeismicCPML2DAniso:
         # 更新y方向速度分量
         self.vy[:-1,:-1] += (value_dsigmaxy_dx + value_dsigmayy_dy) * self.DELTAT / self.rho
 
-    def record_seismograms(self, it):
-        """在检波器位置记录地震图数据"""
+    def record_seismograms(self, it, shot_index):
+        """记录单个震源的地震记录"""
         # 将数据从GPU移动到CPU以进行记录
         vx_cpu = cp.asnumpy(self.vx)  # x方向速度场
         vy_cpu = cp.asnumpy(self.vy)  # y方向速度场
         
-        # 在每个检波器位置记录速度值
-        for i in range(self.NREC):  # 遍历所有检波器
-            # 记录水平和垂直分量的速度
-            self.seismogram_vx[it-1, i] = vx_cpu[self.rec_x[i], self.rec_z[i]]  # 记录x分量
-            self.seismogram_vz[it-1, i] = vy_cpu[self.rec_x[i], self.rec_z[i]]  # 记录y分量
+        # 遍历所有检波器
+        for i in range(self.NREC):  
+            # 记录每个震源的水平和垂直分量的速度
+            self.shot_records_vx[shot_index, it-1, i] = vx_cpu[self.rec_x[i], self.rec_z[i]]  # 记录x分量
+            self.shot_records_vy[shot_index, it-1, i] = vy_cpu[self.rec_x[i], self.rec_z[i]]  # 记录y分量
 
     def output_info(self, it):
         """输出模拟状态信息和波场快照"""
@@ -527,8 +527,11 @@ class SeismicCPML2DAniso:
         self.create_color_image(vx_cpu, it, 1)  # 生成x方向速度场快照
         self.create_color_image(vy_cpu, it, 2)  # 生成y方向速度场快照
 
-    def plot_seismograms(self):
-        """绘制所有检波器的地震记录"""
+    def plot_seismograms(self, shot_index):
+        """绘制地震记录
+        Args:
+            shot_index: 震源索引，如果不指定则绘制所有震源的叠加记录
+        """
         # 创建图形窗口
         plt.figure(figsize=(15, 10))
         
@@ -539,9 +542,23 @@ class SeismicCPML2DAniso:
             # 如果Times New Roman不可用，使用默认字体
             plt.rcParams['font.family'] = 'serif'
         
+        # 确定要绘制的数据
+        if shot_index is not None:
+            # 绘制指定震源的记录
+            vx_data = self.shot_records_vx[shot_index]
+            vz_data = self.shot_records_vy[shot_index]
+            title_suffix = f' (Shot {shot_index+1})'
+            filename_suffix = f'_shot{shot_index+1}'
+        else:
+            # 绘制所有震源的叠加记录
+            vx_data = np.sum(self.shot_records_vx, axis=0)
+            vz_data = np.sum(self.shot_records_vy, axis=0)
+            title_suffix = ' (All Shots)'
+            filename_suffix = '_all_shots'
+
         # 绘制水平分量地震记录
         plt.subplot(211)  # 上半部分显示水平分量
-        plt.imshow(self.seismogram_vx, aspect='auto', cmap='gray',
+        plt.imshow(vx_data, aspect='auto', cmap='gray',
                   extent=[0, self.NREC-1, self.NSTEP, 0])  # 使用灰度图显示
         plt.colorbar(label='Amplitude')  # 添加颜色条
         plt.title('Horizontal Component Seismogram')
@@ -550,7 +567,7 @@ class SeismicCPML2DAniso:
         
         # 绘制垂直分量地震记录
         plt.subplot(212)  # 下半部分显示垂直分量
-        plt.imshow(self.seismogram_vz, aspect='auto', cmap='gray',
+        plt.imshow(vz_data, aspect='auto', cmap='gray',
                   extent=[0, self.NREC-1, self.NSTEP, 0])
         plt.colorbar(label='Amplitude')
         plt.title('Vertical Component Seismogram')
@@ -660,13 +677,9 @@ class SeismicCPML2DAniso:
 
     def save_shot_records(self):
         """保存多炮地震记录"""
-        # 当前现是多炮记录
-        self.shot_records_vx[0] = self.seismogram_vx  # shape: (NSTEP, NREC)
-        self.shot_records_vz[0] = self.seismogram_vz  # shape: (NSTEP, NREC)
-        
-        # 保存为numpy数组文件
+        # 当前现是多炮记录 ，保存为numpy数组文件
         np.save(os.path.join(self.output_dir, 'shot_records_vx.npy'), self.shot_records_vx)
-        np.save(os.path.join(self.output_dir, 'shot_records_vz.npy'), self.shot_records_vz)
+        np.save(os.path.join(self.output_dir, 'shot_records_vy.npy'), self.shot_records_vy)
         
         # 保存参数信息
         params = {
@@ -686,8 +699,10 @@ class SeismicCPML2DAniso:
     def simulate(self):
         """运行主模拟程序"""
         # 检查Courant稳定性条件
-        quasi_cp_max = cp.maximum(cp.sqrt(self.c22/self.rho), cp.sqrt(self.c11/self.rho))  # 计算最大准P波速度
-        Courant_number = quasi_cp_max * self.DELTAT * cp.sqrt(1.0/self.DELTAX**2 + 1.0/self.DELTAY**2)  # 计算Courant数
+        # 计算最大准P波速度
+        quasi_cp_max = cp.maximum(cp.sqrt(self.c22/self.rho), cp.sqrt(self.c11/self.rho))  
+        # 计算Courant数
+        Courant_number = quasi_cp_max * self.DELTAT * cp.sqrt(1.0/self.DELTAX**2 + 1.0/self.DELTAY**2)  
         print(f'Courant数为 {float(Courant_number)}')
         if Courant_number > 1.0:
             raise ValueError('时间步长过大，模拟将不稳定')
@@ -695,38 +710,46 @@ class SeismicCPML2DAniso:
         # 设置PML吸收边界
         self.setup_pml_boundary_x()  # 设置x方向PML边界
         self.setup_pml_boundary_y()  # 设置y方向PML边界
-        
-        # 时间步进主循环
-        for it in range(1, self.NSTEP + 1):
-            # 每100步输出进度信息
-            if it % 100 == 0:
-                print(f'正在处理时间步 {it}/{self.NSTEP}...')
+
+        # 逐炮激发
+        for shot_index, source in enumerate(self.sources):
+            print(f"正在模拟震源 {shot_index + 1}/{len(self.sources)}...")
+
+            # 重置波场和记忆变量
+            self.initialize_arrays()
+
+            # 时间步进主循环
+            for it in range(1, self.NSTEP + 1):
+                # 每100步输出进度信息
+                if it % 100 == 0:
+                    print(f'正在处理时间步 {it}/{self.NSTEP}...')
             
-            # 计算应力分量并更新记忆变量
-            self.compute_stress()
+                # 计算应力分量并更新记忆变量
+                self.compute_stress()
             
-            # 计算速度分量并更新记忆变量
-            self.compute_velocity()
+                # 计算速度分量并更新记忆变量
+                self.compute_velocity()
             
-            # 添加震源
-            self.add_source(it)
+                # 添加震源
+                self.add_source(it, source)
             
-            # 应用Dirichlet边界条件（刚性边界）
-            self.apply_boundary_conditions()
+                # 应用Dirichlet边界条件（刚性边界）
+                self.apply_boundary_conditions()
             
-            # 记录地震图
-            self.record_seismograms(it)
+                # 记录所有震源的地震图  
+                self.record_seismograms(it, shot_index)  
             
-            # 输出信息和波场快照
-            if it % self.IT_DISPLAY == 0 or it == 5:  # 每IT_DISPLAY步或第5步输出
-                self.output_info(it)
-        
-        # 模拟结束后的数据处理
+                # 输出信息和波场快照
+                if it % self.IT_DISPLAY == 0 or it == 5:  # 每IT_DISPLAY步或第5步输出
+                    self.output_info(it)
+
+            print(f"震源 {shot_index + 1} 模拟完成\n")
+    
         # 保存地震记录数据
         self.save_shot_records()
         
         # 绘制并保存地震记录图像
-        self.plot_seismograms()
+        self.plot_seismograms(shot_index=0)
         print("\n模拟结束")
 
 if __name__ == '__main__':
