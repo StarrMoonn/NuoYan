@@ -7,11 +7,11 @@ class SeismicCPML2DAniso:
     def __init__(self):
         """初始化二维VTI介质中的地震波传播模拟（使用CPML吸收边界条件）"""
         # 网格参数设置
-        self.NX = 401                # x方向网格点数
-        self.NY = 401                # y方向网格点数
+        self.NX = 401                 # x方向网格点数
+        self.NY = 401                 # y方向网格点数
         
         # 网格间距设置
-        self.DELTAX = 0.0625e-2      # x方向网格间距(m)
+        self.DELTAX = 0.0625e-2       # x方向网格间距(m)
         self.DELTAY = self.DELTAX     # y方向网格间距(m)，与x方向相同
         
         # PML吸收边界参数设置
@@ -37,12 +37,40 @@ class SeismicCPML2DAniso:
         # 震源参数设置
         self.t0 = 1.20/self.f0        # 时间延迟
         self.factor = 1.0e7           # 震源振幅因子
-        self.ISOURCE = self.NX // 2   # 震源x位置(网格点)
-        self.JSOURCE = self.NY // 2   # 震源y位置(网格点)
-        self.xsource = (self.ISOURCE - 1) * self.DELTAX  # 震源实际x坐标
-        self.ysource = (self.JSOURCE - 1) * self.DELTAY  # 震源实际y坐标
-        self.ANGLE_FORCE = 0.0        # 震源力的方向角度(度)
+        # self.ISOURCE = self.NX // 2   # 震源x位置(网格点)
+        # self.JSOURCE = self.NY // 2   # 震源y位置(网格点)
+        # self.xsource = (self.ISOURCE - 1) * self.DELTAX  # 震源实际x坐标
+        # self.ysource = (self.JSOURCE - 1) * self.DELTAY  # 震源实际y坐标
+        # self.ANGLE_FORCE = 0.0        # 震源力的方向角度(度)
+
+        # 多震源参数设置
+        self.NSHOT = 3               # 总震源个数
+        self.ISOURCE_START = 100     # 起始震源x位置
+        self.JSOURCE_START = 200     # 起始震源y位置
+        self.dISOURCE = 100          # 震源x方向间隔(网格点)
+        self.dJSOURCE = 0            # 震源y方向间隔(网格点)
+        self.ANGLE_FORCE = 0.0       # 震源力的方向角度(度)
         
+        # 生成所有震源位置
+        self.sources = []
+        for i in range(self.NSHOT):
+            # 从初始位置开始，按照设定的水平和垂直间隔计算每个震源位置
+            isource = self.ISOURCE_START + i * self.dISOURCE  # 水平位置
+            jsource = self.JSOURCE_START + i * self.dJSOURCE  # 垂直位置
+    
+            self.sources.append({
+                 'ISOURCE': isource,
+                 'JSOURCE': jsource,
+                 'ANGLE_FORCE': self.ANGLE_FORCE,
+                 'xsource': (isource - 1) * self.DELTAX,
+                 'ysource': (jsource - 1) * self.DELTAY
+            })
+
+        # 调试代码，检验震源位置是否正确：
+        print(f"Total sources: {len(self.sources)}")
+        for idx, source in enumerate(self.sources):
+            print(f"Source {idx+1}: ISOURCE={source['ISOURCE']}, JSOURCE={source['JSOURCE']}")
+
         # 检波器参数设置
         self.NREC = 50                # 检波器数量
         self.first_rec_x = 100        # 第一个检波器x位置
@@ -80,7 +108,7 @@ class SeismicCPML2DAniso:
         self.setup_receivers()
         
         # 定义多炮记录数组
-        self.NSHOT = 1  # 炮数(可以修改)
+        self.NSHOT = 3  # 炮数(可以修改)
         
         # 创建两个三维数组来存储多炮记录
         # 维度: (炮点数, 时间步数, 检波器数)
@@ -146,7 +174,7 @@ class SeismicCPML2DAniso:
         self.b_y_half = cp.zeros(self.NY, dtype=cp.float64)
 
     def add_source(self, it):
-        """添加震源（在指定网格点处添加力矢量）"""
+        """添加多个震源（在指定网格点处添加力矢量）"""
         # 计算高斯函数的参数
         a = self.PI * self.PI * self.f0 * self.f0    # 高斯函数的频率参数
         t = (it-1) * self.DELTAT                     # 当前时刻
@@ -159,12 +187,17 @@ class SeismicCPML2DAniso:
         force_y = cp.cos(self.ANGLE_FORCE * self.DEGREES_TO_RADIANS) * source_term  # y方向分量
         
         # 获取震源位置
-        i = self.ISOURCE  # 震源x坐标
-        j = self.JSOURCE  # 震源y坐标
+        # i = self.ISOURCE  # 震源x坐标
+        # j = self.JSOURCE  # 震源y坐标
+
+        # 对每个震源位置添加力
+        for source in self.sources:
+            i = source['ISOURCE']
+            j = source['JSOURCE']
         
-        # 将力添加到速度场中
-        self.vx[i,j] += force_x * self.DELTAT / self.rho  # 更新x方向速度
-        self.vy[i,j] += force_y * self.DELTAT / self.rho  # 更新y方向速度
+            # 将力添加到速度场中
+            self.vx[i,j] += force_x * self.DELTAT / self.rho  # 更新x方向速度
+            self.vy[i,j] += force_y * self.DELTAT / self.rho  # 更新y方向速度
         
     def setup_receivers(self):
         """设置检波器位置"""
@@ -569,12 +602,27 @@ class SeismicCPML2DAniso:
                 normalized_value = image_data_2D[ix,iy] / max_amplitude
                 normalized_value = np.clip(normalized_value, -1.0, 1.0)  # 限制在[-1,1]范围内
                 
-                # 绘制震源位置（橙色十字）
-                if ((ix >= self.ISOURCE - width_cross and ix <= self.ISOURCE + width_cross and 
-                     iy >= self.JSOURCE - thickness_cross and iy <= self.JSOURCE + thickness_cross) or
-                    (ix >= self.ISOURCE - thickness_cross and ix <= self.ISOURCE + thickness_cross and
-                     iy >= self.JSOURCE - width_cross and iy <= self.JSOURCE + width_cross)):
-                    img[iy,ix] = [1.0, 0.616, 0.0]  # 橙色
+                # 绘制所有震源位置（橙色十字）
+                # if ((ix >= self.ISOURCE - width_cross and ix <= self.ISOURCE + width_cross and 
+                #      iy >= self.JSOURCE - thickness_cross and iy <= self.JSOURCE + thickness_cross) or
+                #     (ix >= self.ISOURCE - thickness_cross and ix <= self.ISOURCE + thickness_cross and
+                #      iy >= self.JSOURCE - width_cross and iy <= self.JSOURCE + width_cross)):
+                #     img[iy,ix] = [1.0, 0.616, 0.0]  # 橙色
+                is_source = False
+                for source in self.sources:
+                   if ((ix >= source['ISOURCE'] - width_cross and 
+                        ix <= source['ISOURCE'] + width_cross and 
+                        iy >= source['JSOURCE'] - thickness_cross and 
+                        iy <= source['JSOURCE'] + thickness_cross) or
+                       (ix >= source['ISOURCE'] - thickness_cross and 
+                        ix <= source['ISOURCE'] + thickness_cross and 
+                        iy >= source['JSOURCE'] - width_cross and 
+                        iy <= source['JSOURCE'] + width_cross)):
+                       is_source = True
+                       break
+               
+                if is_source:
+                   img[iy,ix] = [1.0, 0.616, 0.0]  # 橙色
                 
                 # 绘制边框（黑色）
                 elif ix <= 1 or ix >= self.NX-2 or iy <= 1 or iy >= self.NY-2:
@@ -612,7 +660,7 @@ class SeismicCPML2DAniso:
 
     def save_shot_records(self):
         """保存多炮地震记录"""
-        # 当前现是单炮记录
+        # 当前现是多炮记录
         self.shot_records_vx[0] = self.seismogram_vx  # shape: (NSTEP, NREC)
         self.shot_records_vz[0] = self.seismogram_vz  # shape: (NSTEP, NREC)
         
@@ -627,7 +675,10 @@ class SeismicCPML2DAniso:
             'NREC': self.NREC,      # 检波器数
             'dt': self.DELTAT,      # 时间采样间隔
             'dx': self.DELTAX,      # 空间采样间隔
-            'source_positions': [(self.ISOURCE, self.JSOURCE)],  # 震源位置
+            'source_start': (self.ISOURCE_START, self.JSOURCE_START),
+            'source_spacing': (self.dISOURCE, self.dJSOURCE),
+            'source_positions': [(s['ISOURCE'], s['JSOURCE']) for s in self.sources], # 震源位置
+            'source_angle': self.ANGLE_FORCE,
             'receiver_positions': list(zip(self.rec_x, self.rec_z))  # 检波器位置
         }
         np.save(os.path.join(self.output_dir, 'simulation_params.npy'), params)
