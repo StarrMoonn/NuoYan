@@ -499,27 +499,34 @@ class SeismicCPML2DAniso:
         # 创建图形窗口
         plt.figure(figsize=(15, 10))
         
+        # 设置全局字体
+        try:
+            plt.rcParams['font.family'] = 'Times New Roman'
+        except:
+            # 如果Times New Roman不可用，使用默认字体
+            plt.rcParams['font.family'] = 'serif'
+        
         # 绘制水平分量地震记录
         plt.subplot(211)  # 上半部分显示水平分量
         plt.imshow(self.seismogram_vx, aspect='auto', cmap='gray',
                   extent=[0, self.NREC-1, self.NSTEP, 0])  # 使用灰度图显示
-        plt.colorbar(label='振幅')  # 添加颜色条
-        plt.title('水平分量地震记录')
-        plt.xlabel('检波器编号')
-        plt.ylabel('时间步 (nt)')
+        plt.colorbar(label='Amplitude')  # 添加颜色条
+        plt.title('Horizontal Component Seismogram')
+        plt.xlabel('Receiver Number')
+        plt.ylabel('Time Step (nt)')
         
         # 绘制垂直分量地震记录
         plt.subplot(212)  # 下半部分显示垂直分量
         plt.imshow(self.seismogram_vz, aspect='auto', cmap='gray',
                   extent=[0, self.NREC-1, self.NSTEP, 0])
-        plt.colorbar(label='振幅')
-        plt.title('垂直分量地震记录')
-        plt.xlabel('检波器编号')
-        plt.ylabel('时间步 (nt)')
+        plt.colorbar(label='Amplitude')
+        plt.title('Vertical Component Seismogram')
+        plt.xlabel('Receiver Number')
+        plt.ylabel('Time Step (nt)')
         
         # 调整布局并保存图像
         plt.tight_layout()  # 自动调整子图之间的间距
-        plt.savefig(os.path.join(self.output_dir, 'seismograms.png'))  # 保存到output目录
+        plt.savefig(os.path.join(self.output_dir, 'seismograms.png'), dpi=300)  # 保存高分辨率图像
         plt.close()  # 关闭图形窗口释放内存
 
     def create_color_image(self, image_data_2D, it, field_number):
