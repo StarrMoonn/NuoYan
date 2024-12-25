@@ -3,6 +3,112 @@ import matplotlib.pyplot as plt
 import os
 import cupy as cp
 
+
+# 定义CUDA 核函数代码
+cuda_code = r'''
+extern "C" __global__ void compute_stress(
+    const double* vx, const double* vy,
+    double* sigmaxx, double* sigmayy, double* sigmaxy,
+    double* memory_dvx_dx, double* memory_dvy_dy,
+    double* memory_dvy_dx, double* memory_dvx_dy,
+    const double* b_x_half, const double* b_y, const double* a_x_half, const double* a_y,
+    const double* b_x, const double* b_y_half, const double* a_x, const double* a_y_half,
+    const double* K_x_half, const double* K_y, const double* K_x, const double* K_y_half,
+    double DELTAX, double DELTAY, double DELTAT,
+    double c11, double c12, double c22, double c33,
+    int NX, int NY)
+{
+    int i = blockIdx.x * blockDim.x + threadIdx.x; // 网格 i 索引
+    int j = blockIdx.y * blockDim.y + threadIdx.y; // 网格 j 索引
+
+    if (j >= 2 && j < NY && i >= 1 && i < NX - 1) {
+        // 第一部分：正应力分量
+        double value_dvx_dx = (vx[(i + 1) * NY + j] - vx[i * NY + j]) / DELTAX;
+        double value_dvy_dy = (vy[i * NY + j] - vy[i * NY + (j - 1)]) / DELTAY;
+
+        memory_dvx_dx[i * NY + j] = b_x_half[i] * memory_dvx_dx[i * NY + j] +
+                                    a_x_half[i] * value_dvx_dx;
+        memory_dvy_dy[i * NY + j] = b_y[j] * memory_dvy_dy[i * NY + j] +
+                                    a_y[j] * value_dvy_dy;
+
+        value_dvx_dx = value_dvx_dx / K_x_half[i] + memory_dvx_dx[i * NY + j];
+        value_dvy_dy = value_dvy_dy / K_y[j] + memory_dvy_dy[i * NY + j];
+
+        sigmaxx[i * NY + j] += (c11 * value_dvx_dx + c12 * value_dvy_dy) * DELTAT;
+        sigmayy[i * NY + j] += (c12 * value_dvx_dx + c22 * value_dvy_dy) * DELTAT;
+    }
+
+    if (j >= 1 && j < NY - 1 && i >= 2 && i < NX) {
+        // 第二部分：剪切应力分量
+        double value_dvy_dx = (vy[i * NY + j] - vy[(i - 1) * NY + j]) / DELTAX;
+        double value_dvx_dy = (vx[i * NY + (j + 1)] - vx[i * NY + j]) / DELTAY;
+
+        memory_dvy_dx[i * NY + j] = b_x[i] * memory_dvy_dx[i * NY + j] +
+                                    a_x[i] * value_dvy_dx;
+        memory_dvx_dy[i * NY + j] = b_y_half[j] * memory_dvx_dy[i * NY + j] +
+                                    a_y_half[j] * value_dvx_dy;
+
+        value_dvy_dx = value_dvy_dx / K_x[i] + memory_dvy_dx[i * NY + j];
+        value_dvx_dy = value_dvx_dy / K_y_half[j] + memory_dvx_dy[i * NY + j];
+
+        sigmaxy[i * NY + j] += c33 * (value_dvy_dx + value_dvx_dy) * DELTAT;
+    }
+}
+
+extern "C" __global__ void compute_velocity(
+    const double* sigmaxx, const double* sigmayy, const double* sigmaxy,
+    double* vx, double* vy,
+    double* memory_dsigmaxx_dx, double* memory_dsigmaxy_dy,
+    double* memory_dsigmaxy_dx, double* memory_dsigmayy_dy,
+    const double* b_x, const double* b_y, const double* a_x, const double* a_y,
+    const double* b_x_half, const double* b_y_half, const double* a_x_half, const double* a_y_half,
+    const double* K_x, const double* K_y, const double* K_x_half, const double* K_y_half,
+    double DELTAX, double DELTAY, double DELTAT, double rho,
+    int NX, int NY)
+{
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    int j = blockIdx.y * blockDim.y + threadIdx.y;
+
+    if (j >= 2 && j < NY && i >= 2 && i < NX) {
+        double value_dsigmaxx_dx = (sigmaxx[i * NY + j] - sigmaxx[(i - 1) * NY + j]) / DELTAX;
+        double value_dsigmaxy_dy = (sigmaxy[i * NY + j] - sigmaxy[i * NY + (j - 1)]) / DELTAY;
+
+        memory_dsigmaxx_dx[i * NY + j] = b_x[i] * memory_dsigmaxx_dx[i * NY + j] +
+                                         a_x[i] * value_dsigmaxx_dx;
+        memory_dsigmaxy_dy[i * NY + j] = b_y[j] * memory_dsigmaxy_dy[i * NY + j] +
+                                         a_y[j] * value_dsigmaxy_dy;
+
+        value_dsigmaxx_dx = value_dsigmaxx_dx / K_x[i] + memory_dsigmaxx_dx[i * NY + j];
+        value_dsigmaxy_dy = value_dsigmaxy_dy / K_y[j] + memory_dsigmaxy_dy[i * NY + j];
+
+        vx[i * NY + j] += (value_dsigmaxx_dx + value_dsigmaxy_dy) * DELTAT / rho;
+    }
+
+    if (j >= 1 && j < NY - 1 && i >= 1 && i < NX - 1) {
+        double value_dsigmaxy_dx = (sigmaxy[(i + 1) * NY + j] - sigmaxy[i * NY + j]) / DELTAX;
+        double value_dsigmayy_dy = (sigmayy[i * NY + (j + 1)] - sigmayy[i * NY + j]) / DELTAY;
+
+        memory_dsigmaxy_dx[i * NY + j] = b_x_half[i] * memory_dsigmaxy_dx[i * NY + j] +
+                                         a_x_half[i] * value_dsigmaxy_dx;
+        memory_dsigmayy_dy[i * NY + j] = b_y_half[j] * memory_dsigmayy_dy[i * NY + j] +
+                                         a_y_half[j] * value_dsigmayy_dy;
+
+        value_dsigmaxy_dx = value_dsigmaxy_dx / K_x_half[i] + memory_dsigmaxy_dx[i * NY + j];
+        value_dsigmayy_dy = value_dsigmayy_dy / K_y_half[j] + memory_dsigmayy_dy[i * NY + j];
+
+        vy[i * NY + j] += (value_dsigmaxy_dx + value_dsigmayy_dy) * DELTAT / rho;
+    }
+}
+
+'''
+
+
+module = cp.RawModule(code=cuda_code)
+compute_stress = module.get_function("compute_stress")
+compute_velocity = module.get_function("compute_velocity")
+
+
+
 class SeismicCPML2DAniso:
     def __init__(self):
         """初始化二维VTI介质中的地震波传播模拟（使用CPML吸收边界条件）"""
@@ -172,6 +278,8 @@ class SeismicCPML2DAniso:
         self.a_y_half = cp.zeros(self.NY, dtype=cp.float64)
         self.b_y = cp.zeros(self.NY, dtype=cp.float64)
         self.b_y_half = cp.zeros(self.NY, dtype=cp.float64)
+
+    
 
     def add_source(self, it, source):
         """添加单个震源（在指定网格点处添加力矢量）
@@ -415,82 +523,47 @@ class SeismicCPML2DAniso:
         self.vy[:,0] = self.ZERO    # 下边界
         self.vy[:,-1] = self.ZERO   # 上边界
 
-    def compute_stress(self):
-        """计算应力分量并更新记忆变量"""
-        # 计算速度梯度
-        value_dvx_dx = (self.vx[1:,:] - self.vx[:-1,:]) / self.DELTAX    # x方向速度对x的导数
-        value_dvy_dy = cp.zeros_like(value_dvx_dx)
-        value_dvy_dy[:,1:] = (self.vy[:-1,1:] - self.vy[:-1,:-1]) / self.DELTAY  # y方向速度对y的导数
-        
-        # 更新PML记忆变量
-        self.memory_dvx_dx[:-1,:] = (self.b_x_half[:-1,None] * self.memory_dvx_dx[:-1,:] + 
-                                    self.a_x_half[:-1,None] * value_dvx_dx)
-        self.memory_dvy_dy[:-1,1:] = (self.b_y[1:,None].T * self.memory_dvy_dy[:-1,1:] + 
-                                     self.a_y[1:,None].T * value_dvy_dy[:,1:])
-        
-        # 将PML效应加入到导数计算中
-        value_dvx_dx = value_dvx_dx / self.K_x_half[:-1,None] + self.memory_dvx_dx[:-1,:]
-        value_dvy_dy[:,1:] = value_dvy_dy[:,1:] / self.K_y[1:,None].T + self.memory_dvy_dy[:-1,1:]
-        
-        # 更新正应力分量
-        self.sigmaxx[:-1,1:] += (self.c11 * value_dvx_dx[:,1:] + self.c12 * value_dvy_dy[:,1:]) * self.DELTAT
-        self.sigmayy[:-1,1:] += (self.c12 * value_dvx_dx[:,1:] + self.c22 * value_dvy_dy[:,1:]) * self.DELTAT
+    def compute_wave_propagation(self):
+        """在 GPU 上计算波场传播"""
+        # 定义计算网格
+        block_dim = (16, 16)  # 线程块维度
+        grid_x = (self.NX + block_dim[0] - 1) // block_dim[0]
+        grid_y = (self.NY + block_dim[1] - 1) // block_dim[1]
+        grid_dim = (grid_x, grid_y)  # 网格维度
 
-        # 计算剪应力部分
-        # 使用向量化操作计算速度梯度
-        value_dvy_dx = (self.vy[1:,:-1] - self.vy[:-1,:-1]) / self.DELTAX    # vy对x的偏导数
-        value_dvx_dy = (self.vx[1:,1:] - self.vx[1:,:-1]) / self.DELTAY     # vx对y的偏导数
-        
-        # 更新PML记忆变量
-        # 对x方向的记忆变量进行更新
-        self.memory_dvy_dx[1:,:-1] = (self.b_x[1:,None] * self.memory_dvy_dx[1:,:-1] + 
-                                     self.a_x[1:,None] * value_dvy_dx)
-        # 对y方向的记忆变量进行更新
-        self.memory_dvx_dy[1:,:-1] = (self.b_y_half[:-1,None].T * self.memory_dvx_dy[1:,:-1] + 
-                                     self.a_y_half[:-1,None].T * value_dvx_dy)
-        
-        # 将PML效应加入到导数计算中
-        value_dvy_dx = value_dvy_dx / self.K_x[1:,None] + self.memory_dvy_dx[1:,:-1]      # x方向PML修正
-        value_dvx_dy = value_dvx_dy / self.K_y_half[:-1,None].T + self.memory_dvx_dy[1:,:-1]  # y方向PML修正
-        
-        # 更新剪应力分量
-        self.sigmaxy[1:,:-1] += self.c33 * (value_dvy_dx + value_dvx_dy) * self.DELTAT
+        # 计算应力场
+        compute_stress(grid_dim, block_dim, (
+            self.vx, self.vy,               # 速度场
+            self.sigmaxx, self.sigmayy, self.sigmaxy,  # 应力场
+            self.memory_dvx_dx, self.memory_dvy_dy,    # 记忆变量
+            self.memory_dvy_dx, self.memory_dvx_dy,
+            self.b_x_half, self.b_y,                   # PML参数
+            self.a_x_half, self.a_y,
+            self.b_x, self.b_y_half,
+            self.a_x, self.a_y_half,
+            self.K_x_half, self.K_y,                   # 拉伸系数
+            self.K_x, self.K_y_half,
+            self.DELTAX, self.DELTAY, self.DELTAT,     # 网格参数
+            self.c11, self.c12, self.c22, self.c33,    # 材料参数
+            self.NX, self.NY                           # 网格大小
+        ))
 
-    def compute_velocity(self):
-        """计算速度分量并更新记忆变量"""
-        # 计算x方向速度所需的应力梯度
-        value_dsigmaxx_dx = (self.sigmaxx[1:,1:] - self.sigmaxx[:-1,1:]) / self.DELTAX   # σxx对x的偏导数
-        value_dsigmaxy_dy = (self.sigmaxy[1:,1:] - self.sigmaxy[1:,:-1]) / self.DELTAY   # σxy对y的偏导数
-        
-        # 更新x方向速度相关的PML记忆变量
-        self.memory_dsigmaxx_dx[1:,1:] = (self.b_x[1:,None] * self.memory_dsigmaxx_dx[1:,1:] + 
-                                         self.a_x[1:,None] * value_dsigmaxx_dx)
-        self.memory_dsigmaxy_dy[1:,1:] = (self.b_y[1:,None].T * self.memory_dsigmaxy_dy[1:,1:] + 
-                                         self.a_y[1:,None].T * value_dsigmaxy_dy)
-        
-        # 将PML效应加入到应力梯度计算中
-        value_dsigmaxx_dx = value_dsigmaxx_dx / self.K_x[1:,None] + self.memory_dsigmaxx_dx[1:,1:]
-        value_dsigmaxy_dy = value_dsigmaxy_dy / self.K_y[1:,None].T + self.memory_dsigmaxy_dy[1:,1:]
-        
-        # 更新x方向速度分量
-        self.vx[1:,1:] += (value_dsigmaxx_dx + value_dsigmaxy_dy) * self.DELTAT / self.rho
-        
-        # 计算y方向速度所需的应力梯度
-        value_dsigmaxy_dx = (self.sigmaxy[1:,:-1] - self.sigmaxy[:-1,:-1]) / self.DELTAX  # σxy对x的偏导数
-        value_dsigmayy_dy = (self.sigmayy[:-1,1:] - self.sigmayy[:-1,:-1]) / self.DELTAY  # σyy对y的偏导数
-        
-        # 更新y方向速度相关的PML记忆变量
-        self.memory_dsigmaxy_dx[:-1,:-1] = (self.b_x_half[:-1,None] * self.memory_dsigmaxy_dx[:-1,:-1] + 
-                                           self.a_x_half[:-1,None] * value_dsigmaxy_dx)
-        self.memory_dsigmayy_dy[:-1,:-1] = (self.b_y_half[:-1,None].T * self.memory_dsigmayy_dy[:-1,:-1] + 
-                                           self.a_y_half[:-1,None].T * value_dsigmayy_dy)
-        
-        # 将PML效应加入到应力梯度计算中
-        value_dsigmaxy_dx = value_dsigmaxy_dx / self.K_x_half[:-1,None] + self.memory_dsigmaxy_dx[:-1,:-1]
-        value_dsigmayy_dy = value_dsigmayy_dy / self.K_y_half[:-1,None].T + self.memory_dsigmayy_dy[:-1,:-1]
-        
-        # 更新y方向速度分量
-        self.vy[:-1,:-1] += (value_dsigmaxy_dx + value_dsigmayy_dy) * self.DELTAT / self.rho
+        # 计算速度场
+        compute_velocity(grid_dim, block_dim, (
+            self.sigmaxx, self.sigmayy, self.sigmaxy,  # 应力场
+            self.vx, self.vy,                          # 速度场
+            self.memory_dsigmaxx_dx, self.memory_dsigmaxy_dy,  # 记忆变量
+            self.memory_dsigmaxy_dx, self.memory_dsigmayy_dy,
+            self.b_x, self.b_y,                        # PML参数
+            self.a_x, self.a_y,
+            self.b_x_half, self.b_y_half,
+            self.a_x_half, self.a_y_half,
+            self.K_x, self.K_y,                        # 拉伸系数
+            self.K_x_half, self.K_y_half,
+            self.DELTAX, self.DELTAY, self.DELTAT,     # 网格参数
+            self.rho,                                  # 密度
+            self.NX, self.NY                           # 网格大小
+        ))
 
     def record_seismograms(self, it, shot_index):
         """记录单个震源的地震记录"""
@@ -724,11 +797,8 @@ class SeismicCPML2DAniso:
                 if it % 100 == 0:
                     print(f'正在处理时间步 {it}/{self.NSTEP}...')
             
-                # 计算应力分量并更新记忆变量
-                self.compute_stress()
-            
-                # 计算速度分量并更新记忆变量
-                self.compute_velocity()
+                # 使用正确的方法名
+                self.compute_wave_propagation()  # 替换 self.compute_stress()
             
                 # 添加震源
                 self.add_source(it, source)
