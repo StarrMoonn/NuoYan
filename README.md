@@ -1,22 +1,9 @@
-# 波场模拟器
+# 人生何处不相逢
 
-这是一个基于Python的波场模拟程序，用于...
+最远的你是我最近的爱。
 
 ## 功能特点
-- 支持PML边界条件
-- 可视化波场传播
-- ...
-
-## 安装要求
-- Python 3.8+
-- NumPy
-- Matplotlib
-
-## 使用方法
-
-
-from A import run_simulation
-
+- VTI介质全波形反演
 
 ## 许可证
 MIT License
