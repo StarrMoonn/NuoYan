@@ -1,3 +1,54 @@
+%% VTI介质全波形反演主类
+% 功能：实现VTI介质的全波形反演算法，包括梯度计算、步长搜索和模型更新
+% 
+% 说明：
+%   1. 管理完整的FWI迭代过程：
+%      - 计算目标函数值和梯度
+%      - 使用抛物线法搜索最优步长
+%      - 更新模型参数
+%   2. 支持迭代过程的监控和输出：
+%      - 保存每次迭代的梯度和目标函数值
+%      - 生成收敛曲线
+%      - 记录迭代改进效果
+%   3. 提供完整的FWI工作流程
+%
+% 主要方法：
+%   - compute_misfit：计算目标函数值
+%   - compute_total_gradient：计算所有炮的总梯度
+%   - compute_step_length：使用抛物线法计算最优步长
+%   - update_model_with_step：更新模型参数
+%   - plot_convergence_curve：绘制收敛曲线
+%
+% 输入参数：
+%   params结构体必须包含：
+%   - project_root：项目根目录
+%   - obs_json_file：观测数据参数文件
+%   - syn_json_file：合成数据参数文件
+%   - fwi：FWI相关参数
+%     * max_iterations：最大迭代次数（默认100）
+%     * tolerance：收敛容差（默认0.1）
+%
+% 输出：
+%   - 迭代梯度：保存在gradient_output_dir
+%   - 目标函数值：保存在misfit_output_dir
+%   - 收敛曲线：以图片形式保存
+%
+% 使用示例：
+%   params.project_root = 'path/to/project';
+%   params.obs_json_file = 'params_obs.json';
+%   params.syn_json_file = 'params_syn.json';
+%   params.fwi.max_iterations = 100;
+%   fwi = VTI_FWI(params);
+%   fwi.run();
+%
+% 注意事项：
+%   - 需要正确设置观测数据和初始模型
+%   - 迭代过程可能需要较长时间
+%   - 建议使用并行计算加速
+%
+% 作者：StarrMoonn
+% 日期：2025-01-09
+%
 classdef VTI_FWI < handle  
     properties
         gradient_solver              % 梯度计算器实例
