@@ -9,10 +9,10 @@ try
     cd(project_root);
     addpath(project_root);
     
-    % 设置FWI参数（从主程序设置，而不是从json文件）
+    % 设置FWI参数
     fwi_params = struct();
     fwi_params.max_iterations = 20;     % 最大迭代次数
-    fwi_params.tolerance = 0.01;        % 收敛容差（1%）
+    fwi_params.tolerance = 0.1;        % 收敛容差（10%）
     fwi_params.verbose = true;          % 是否输出详细信息
     
     % 加载参数
