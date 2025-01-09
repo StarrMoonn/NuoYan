@@ -22,11 +22,27 @@ classdef VTI_FWI < handle
         end
         
         function misfit = compute_misfit(obj)
-            % 计算目标函数值
-            [misfit, ~] = utils.compute_misfit(obj.gradient_solver.adjoint_solver.obs_vx, ...
-                                             obj.gradient_solver.adjoint_solver.obs_vy, ...
-                                             obj.gradient_solver.adjoint_solver.syn_vx, ...
-                                             obj.gradient_solver.adjoint_solver.syn_vy);
+            % 计算所有炮的总目标函数值
+            nshots = obj.gradient_solver.adjoint_solver.syn_params.NSHOT;  % 获取总炮数
+            misfit = 0;  % 初始化总误差
+            
+            % 逐炮计算误差并累加
+            for ishot = 1:nshots
+                % 获取当前炮的观测数据和合成数据
+                obs_vx_shot = obj.gradient_solver.adjoint_solver.obs_vx{ishot};
+                obs_vy_shot = obj.gradient_solver.adjoint_solver.obs_vy{ishot};
+                syn_vx_shot = obj.gradient_solver.adjoint_solver.syn_vx{ishot};
+                syn_vy_shot = obj.gradient_solver.adjoint_solver.syn_vy{ishot};
+                
+                % 计算当前炮的误差并累加
+                [shot_misfit, ~] = utils.compute_misfit(obs_vx_shot, ...
+                                                      obs_vy_shot, ...
+                                                      syn_vx_shot, ...
+                                                      syn_vy_shot);
+                misfit = misfit + shot_misfit;
+            end
+            
+            fprintf('总目标函数值: %e\n', misfit);
         end
         
         function total_gradient = compute_total_gradient(obj)
@@ -152,32 +168,21 @@ classdef VTI_FWI < handle
             for iter = 1:obj.max_iterations
                 fprintf('\n迭代 %d/%d\n', iter, obj.max_iterations);
                 
-                % 1. 计算总梯度
-                total_gradient = obj.compute_total_gradient();
+                % 1. 计算当前模型下所有炮的总误差
+                current_misfit = obj.compute_misfit();  % 累加所有炮的误差
                 
-                % 2. 计算当前目标函数值
-                current_misfit = obj.compute_misfit();
+                % 2. 计算所有炮的总梯度
+                total_gradient = obj.compute_total_gradient();  % 已经在函数内累加了所有炮的梯度
                 
-                % 3. 计算最优步长
+                % 3. 更新模型
                 step = obj.compute_step_length(total_gradient, current_misfit);
-                
-                % 4. 使用最优步长更新模型
                 obj.update_model_with_step(total_gradient, step);
                 
-                % 5. 计算新的目标函数值
-                new_misfit = obj.compute_misfit();
+                % 4. 计算更新后的总误差
+                new_misfit = obj.compute_misfit();  % 再次累加所有炮的误差
                 
-                % 6. 保存历史记录
-                obj.history.misfit(iter) = new_misfit;
-                obj.history.step_length(iter) = step;
-                
-                % 7. 输出当前状态
-                fprintf('目标函数值: %e (改善: %e)\n', ...
-                    new_misfit, current_misfit - new_misfit);
-                fprintf('使用步长: %e\n', step);
-                
-                % 8. 检查收敛
-                if iter > 1 && abs(new_misfit - current_misfit) < obj.tolerance
+                % 5. 检查是否收敛
+                if abs(new_misfit - current_misfit) < obj.tolerance
                     fprintf('已收敛，停止迭代\n');
                     break;
                 end
