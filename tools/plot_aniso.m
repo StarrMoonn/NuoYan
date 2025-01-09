@@ -30,13 +30,6 @@
 %
 
 function plot_elastic_params(model_path)
-    % 定义网格参数
-    nz = 201;
-    nx = 801;
-    dz = 0.01;
-    dx = 0.01;
-    oz = 0.0;
-    ox = 0.0;
     % 修改extent为实际距离（km）
     extent = [0, 8, 2, 0];  % [xmin, xmax, ymax, ymin]
     
