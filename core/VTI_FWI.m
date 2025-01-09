@@ -5,6 +5,8 @@ classdef VTI_FWI < handle
         tolerance                    % 收敛容差（相对变化）
         history                      % 存储迭代历史
         output_dir                   % 输出目录
+        gradient_output_dir          % 迭代梯度输出目录
+        misfit_output_dir            % 残差输出目录
     end
     
     methods
@@ -14,10 +16,21 @@ classdef VTI_FWI < handle
             obj.max_iterations = params.fwi.max_iterations;
             obj.tolerance = params.fwi.tolerance;
             obj.history = struct('misfit', [], 'model', [], 'step_length', []);
-            obj.output_dir = fullfile(params.project_root, 'data', 'output', 'fwi');
             
+            % 设置输出目录
+            obj.output_dir = fullfile(params.project_root, 'data', 'output', 'fwi');
+            obj.gradient_output_dir = fullfile(params.project_root, 'data', 'output', 'gradient');
+            obj.misfit_output_dir = fullfile(params.project_root, 'data', 'output', 'fwi_misfit');
+            
+            % 创建必要的目录
             if ~exist(obj.output_dir, 'dir')
                 mkdir(obj.output_dir);
+            end
+            if ~exist(obj.gradient_output_dir, 'dir')
+                mkdir(obj.gradient_output_dir);
+            end
+            if ~exist(obj.misfit_output_dir, 'dir')
+                mkdir(obj.misfit_output_dir);
             end
         end
         
@@ -162,34 +175,92 @@ classdef VTI_FWI < handle
             fprintf('\n=== 开始FWI迭代 ===\n');
             
             if isempty(gcp('nocreate'))
-                parpool('local');  % 或指定具体的工作进程数
+                parpool('local');
             end
             
+            % 计算初始误差作为基准
+            initial_misfit = obj.compute_misfit();
+            previous_misfit = initial_misfit;
+            
+            % 存储所有迭代的残差，用于绘图
+            all_misfits = zeros(obj.max_iterations, 1);
+            
             for iter = 1:obj.max_iterations
-                fprintf('\n迭代 %d/%d\n', iter, obj.max_iterations);
+                fprintf('\n=== 迭代 %d/%d ===\n', iter, obj.max_iterations);
                 
-                % 1. 计算当前模型下所有炮的总误差
-                current_misfit = obj.compute_misfit();  % 累加所有炮的误差
+                % 1. 计算总梯度
+                total_gradient = obj.compute_total_gradient();
+                % 保存总梯度
+                obj.save_iteration_gradient(total_gradient, iter);
                 
-                % 2. 计算所有炮的总梯度
-                total_gradient = obj.compute_total_gradient();  % 已经在函数内累加了所有炮的梯度
+                % 2. 计算当前目标函数值
+                current_misfit = obj.compute_misfit();
+                % 保存残差
+                misfit_data = struct('misfit', current_misfit, ...
+                                   'total_improvement', total_improvement, ...
+                                   'iter_improvement', iter_improvement);
+                obj.save_iteration_misfit(misfit_data, iter);
                 
-                % 3. 更新模型
+                % 存储残差用于绘图
+                all_misfits(iter) = current_misfit;
+                
+                % 3. 计算并显示改进效果
+                % 相对于初始模型的改进
+                total_improvement = (initial_misfit - current_misfit) / initial_misfit * 100;
+                % 相对于上一次迭代的改进
+                iter_improvement = (previous_misfit - current_misfit) / previous_misfit * 100;
+                
+                fprintf('目标函数值: %e\n', current_misfit);
+                fprintf('总体改进: %.2f%%\n', total_improvement);
+                fprintf('本次改进: %.2f%%\n', iter_improvement);
+                
+                % 4. 计算最优步长
                 step = obj.compute_step_length(total_gradient, current_misfit);
+                
+                % 5. 使用最优步长更新模型
                 obj.update_model_with_step(total_gradient, step);
                 
-                % 4. 计算更新后的总误差
-                new_misfit = obj.compute_misfit();  % 再次累加所有炮的误差
+                % 6. 保存当前误差用于下次比较
+                previous_misfit = current_misfit;
                 
-                % 5. 检查是否收敛
-                if abs(new_misfit - current_misfit) < obj.tolerance
-                    fprintf('已收敛，停止迭代\n');
+                % 7. 检查收敛
+                if iter > 1 && abs(iter_improvement) < obj.tolerance
+                    fprintf('\n=== 已收敛，停止迭代 ===\n');
+                    fprintf('最终改进效果: %.2f%%\n', total_improvement);
                     break;
                 end
             end
             
+            % 在迭代结束后绘制残差曲线
+            figure;
+            plot(1:iter, all_misfits(1:iter), 'b-o');
+            xlabel('迭代次数');
+            ylabel('残差值');
+            title('FWI迭代收敛曲线');
+            grid on;
+            
+            % 保存图像
+            savefig(fullfile(obj.misfit_output_dir, 'convergence_curve.fig'));
+            saveas(gcf, fullfile(obj.misfit_output_dir, 'convergence_curve.png'));
+            
             % 保存反演结果
             save(fullfile(obj.output_dir, 'fwi_results.mat'), 'obj');
+        end
+        
+        function save_iteration_gradient(obj, total_gradient, iter)
+            % 保存每次迭代的总梯度
+            filename = sprintf('total_gradient_iter_%d.mat', iter);
+            filepath = fullfile(obj.gradient_output_dir, filename);
+            save(filepath, 'total_gradient');
+            fprintf('迭代%d的总梯度已保存到: %s\n', iter, filepath);
+        end
+        
+        function save_iteration_misfit(obj, misfit_data, iter)
+            % 保存每次迭代的残差
+            filename = sprintf('misfit_iter_%d.mat', iter);
+            filepath = fullfile(obj.misfit_output_dir, filename);
+            save(filepath, 'misfit_data');
+            fprintf('迭代%d的残差已保存到: %s\n', iter, filepath);
         end
     end
 end 
