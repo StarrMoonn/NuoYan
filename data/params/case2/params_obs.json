@@ -1,0 +1,72 @@
+{
+    "// 网格参数": null,
+    "NX": 801,
+    "NY": 201,
+    "DELTAX": 10,
+    "DELTAY": 10,
+
+    "// 时间步进参数": null,
+    "NSTEP": 4000,
+    "DELTAT": 0.001,
+
+    "// 材料参数": null,
+    "c11": {
+        "type": "mat",
+        "file": "data/model/case2/c11.mat"
+    },
+    "c13": {
+        "type": "mat",
+        "file": "data/model/case2/c13.mat"
+    },
+    "c33": {
+        "type": "mat",
+        "file": "data/model/case2/c33.mat"
+    },
+    "c44": {
+        "type": "mat",
+        "file": "data/model/case2/c44.mat"
+    },
+    "rho": {
+        "type": "mat",
+        "file": "data/model/case2/rho.mat"
+    },
+
+    "// 震源参数": null,
+    "f0": 10,
+    "factor": 1.0e7,
+    "ANGLE_FORCE": 0.0,
+    "NSHOT": 10,
+    "first_shot_i": 200,
+    "first_shot_j": 10,
+    "shot_di": 40,
+    "shot_dj": 0,
+    "ISOURCE": 200,
+    "JSOURCE": 10,
+    
+    "// 检波器参数": null,
+    "NREC": 401,
+    "first_rec_x": 1.0,
+    "first_rec_y": 10.0,
+    "rec_dx": 2,
+    "rec_dy": 0,
+
+    "// PML边界参数": null,
+    "PML_XMIN": true,
+    "PML_XMAX": true,
+    "PML_YMIN": true,
+    "PML_YMAX": true,
+    "NPOINTS_PML": 10,
+    "NPOWER": 2,
+    "K_MAX_PML": 1.0,
+
+    "// 输出控制参数": null,
+    "IT_DISPLAY": 100,
+    "save_snapshots": false,
+    "compute_mode": "cpu_parallel",
+
+    "adjoint_params": {
+        "save_adjoint_snapshots": true,
+        "snapshot_interval": 100,
+        "adjoint_output_dir": "output/adjoint_snapshots"
+    }
+} 
