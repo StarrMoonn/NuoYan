@@ -21,23 +21,33 @@ classdef VTI_FWI < handle
             end
         end
         
+        function misfit = compute_misfit(obj)
+            % 计算目标函数值
+            [misfit, ~] = utils.compute_misfit(obj.gradient_solver.adjoint_solver.obs_vx, ...
+                                             obj.gradient_solver.adjoint_solver.obs_vy, ...
+                                             obj.gradient_solver.adjoint_solver.syn_vx, ...
+                                             obj.gradient_solver.adjoint_solver.syn_vy);
+        end
+        
         function total_gradient = compute_total_gradient(obj)
-            % 计算所有炮的总梯度（并行版本）
-            nshots = length(obj.gradient_solver.adjoint_solver.syn_params.source_positions);
+            % 计算所有炮的总梯度
+            nshots = obj.gradient_solver.adjoint_solver.syn_params.NSHOT;  % 使用JSON中定义的炮数
+            nx = obj.gradient_solver.adjoint_solver.syn_params.NX;        % 模型X方向网格点数
+            ny = obj.gradient_solver.adjoint_solver.syn_params.NY;        % 模型Y方向网格点数
             
             % 初始化总梯度
             total_gradient = struct();
-            total_gradient.c11 = zeros(801, 201);
-            total_gradient.c13 = zeros(801, 201);
-            total_gradient.c33 = zeros(801, 201);
-            total_gradient.c44 = zeros(801, 201);
-            total_gradient.rho = zeros(801, 201);
+            total_gradient.c11 = zeros(nx, ny);
+            total_gradient.c13 = zeros(nx, ny);
+            total_gradient.c33 = zeros(nx, ny);
+            total_gradient.c44 = zeros(nx, ny);
+            total_gradient.rho = zeros(nx, ny);
             
             % 创建临时数组存储每炮梯度
             shot_gradients = cell(nshots, 1);
             
             % 并行计算每炮梯度
-            fprintf('开始并行计算梯度...\n');
+            fprintf('开始计算%d炮的梯度...\n', nshots);
             parfor ishot = 1:nshots
                 fprintf('计算第%d/%d炮梯度...\n', ishot, nshots);
                 shot_gradients{ishot} = obj.gradient_solver.compute_single_shot_gradient(ishot);
@@ -54,23 +64,6 @@ classdef VTI_FWI < handle
             end
             
             fprintf('梯度计算完成\n');
-        end
-        
-        function update_model(obj, total_gradient)
-            % 更新模型参数
-            syn_params = obj.gradient_solver.adjoint_solver.syn_params;
-            
-            % 更新各向异性参数
-            syn_params.c11 = syn_params.c11 - obj.step_length * total_gradient.c11;
-            syn_params.c13 = syn_params.c13 - obj.step_length * total_gradient.c13;
-            syn_params.c33 = syn_params.c33 - obj.step_length * total_gradient.c33;
-            syn_params.c44 = syn_params.c44 - obj.step_length * total_gradient.c44;
-            syn_params.rho = syn_params.rho - obj.step_length * total_gradient.rho;
-        end
-        
-        function misfit = compute_misfit(obj)
-            % 计算目标函数值
-            misfit = obj.gradient_solver.adjoint_solver.compute_total_misfit();
         end
         
         function step = compute_step_length(obj, total_gradient, current_misfit)
@@ -116,6 +109,7 @@ classdef VTI_FWI < handle
         end
         
         function update_model_with_step(obj, total_gradient, step)
+            % 更新模型参数
             syn_params = obj.gradient_solver.adjoint_solver.syn_params;
             
             % 带步长的梯度下降更新
@@ -126,7 +120,29 @@ classdef VTI_FWI < handle
             syn_params.rho = syn_params.rho - step * total_gradient.rho;
         end
         
+        function model = get_current_model(obj)
+            % 获取当前模型参数的副本
+            syn_params = obj.gradient_solver.adjoint_solver.syn_params;
+            model = struct();
+            model.c11 = syn_params.c11;
+            model.c13 = syn_params.c13;
+            model.c33 = syn_params.c33;
+            model.c44 = syn_params.c44;
+            model.rho = syn_params.rho;
+        end
+        
+        function set_current_model(obj, model)
+            % 设置当前模型参数
+            syn_params = obj.gradient_solver.adjoint_solver.syn_params;
+            syn_params.c11 = model.c11;
+            syn_params.c13 = model.c13;
+            syn_params.c33 = model.c33;
+            syn_params.c44 = model.c44;
+            syn_params.rho = model.rho;
+        end
+        
         function run(obj)
+            % 主程序流程
             fprintf('\n=== 开始FWI迭代 ===\n');
             
             if isempty(gcp('nocreate'))
