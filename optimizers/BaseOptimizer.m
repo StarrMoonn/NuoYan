@@ -97,7 +97,7 @@ classdef BaseOptimizer < handle
             end
         end
         
-        %% === 公共计算函数 ===
+        %% === 残差梯度计算函数 ===
         function misfit = compute_misfit(obj)
             % 计算所有炮的总目标函数值
             nshots = obj.gradient_solver.adjoint_solver.syn_params.NSHOT;
@@ -177,7 +177,7 @@ classdef BaseOptimizer < handle
             iter_improvement = (previous_misfit - current_misfit) / previous_misfit * 100;
         end
         
-        %% === 保存和绘图函数 ===
+        %% === 绘图保存函数 ===
         function save_iteration_results(obj, misfit, total_improvement, iter_improvement, iter)
             misfit_data = struct('misfit', misfit, ...
                               'total_improvement', total_improvement, ...
