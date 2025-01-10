@@ -68,5 +68,10 @@
         "save_adjoint_snapshots": true,
         "snapshot_interval": 100,
         "adjoint_output_dir": "output/adjoint_snapshots"
-    }
+    },
+
+    "// FWI参数设置": null,
+    "optimization": "gradient_descent",
+    "max_iterations": 20,
+    "tolerance": 0.1
 } 

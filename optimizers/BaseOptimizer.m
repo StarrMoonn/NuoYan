@@ -58,7 +58,7 @@
 
 classdef BaseOptimizer < handle
     properties
-        gradient_solver       % 梯度计算实例
+        gradient_solver       % 梯度计算实例 (VTI_Gradient)
         max_iterations        % 最大迭代次数
         tolerance             % 收敛容差
         output_dir            % 输出目录
@@ -73,14 +73,13 @@ classdef BaseOptimizer < handle
     
     methods
         function obj = BaseOptimizer(params)
-            % 构造函数
             % 创建梯度计算实例
-            obj.gradient_solver = GradientSolver(params);  % 假设有GradientSolver类
+            obj.gradient_solver = VTI_Gradient(params);  % 使用VTI_Gradient类
             
             % 设置默认参数
             obj.max_iterations = 50;  % 默认最大迭代次数
-            obj.tolerance = 0.1;  % 默认收敛容差
-         
+            obj.tolerance = 0.1;      % 默认收敛容差
+            
             % 设置输出目录
             obj.output_dir = fullfile(params.project_root, 'data', 'output', 'fwi');
             obj.gradient_output_dir = fullfile(params.project_root, 'data', 'output', 'gradient');
@@ -98,7 +97,7 @@ classdef BaseOptimizer < handle
             end
         end
         
-        % === 公共计算函数 ===
+        %% === 公共计算函数 ===
         function misfit = compute_misfit(obj)
             % 计算所有炮的总目标函数值
             nshots = obj.gradient_solver.adjoint_solver.syn_params.NSHOT;
@@ -153,7 +152,7 @@ classdef BaseOptimizer < handle
             fprintf('梯度计算完成\n');
         end
         
-        % === 模型操作函数 ===
+        %% === 模型操作函数 ===
         function model = get_current_model(obj)
             syn_params = obj.gradient_solver.adjoint_solver.syn_params;
             model = struct();
@@ -179,7 +178,7 @@ classdef BaseOptimizer < handle
             iter_improvement = (previous_misfit - current_misfit) / previous_misfit * 100;
         end
         
-        % === 保存和绘图函数 ===
+        %% === 保存和绘图函数 ===
         function save_iteration_results(obj, misfit, total_improvement, iter_improvement, iter)
             misfit_data = struct('misfit', misfit, ...
                               'total_improvement', total_improvement, ...
