@@ -82,7 +82,7 @@ classdef BBOptimizer < BaseOptimizer
             % 主迭代循环
             for iter = 1:obj.max_iterations
                 % 保存当前状态
-                gk_old_array = utils.model_utils.struct2array(gk);
+                gk_old_array = utils.elastic_params_converter.struct2array(gk);
                 current_model = obj.get_current_model();
                 
                 % BB迭代
@@ -117,7 +117,7 @@ classdef BBOptimizer < BaseOptimizer
             fprintf('\n=== BB法迭代 %d/%d ===\n', iter, obj.max_iterations);
             
             % 保存当前状态
-            gk_old_array = utils.model_utils.struct2array(gk);
+            gk_old_array = utils.elastic_params_converter.struct2array(gk);
             current_model = obj.get_current_model();
             
             % 计算BB方向
@@ -133,8 +133,8 @@ classdef BBOptimizer < BaseOptimizer
             gk_new = obj.compute_total_gradient();
             
             % 更新BB步长（BB1型或BB2型）
-            gk_new_array = utils.model_utils.struct2array(gk_new);
-            sk_array = utils.model_utils.struct2array(sk);
+            gk_new_array = utils.elastic_params_converter.struct2array(gk_new);
+            sk_array = utils.elastic_params_converter.struct2array(sk);
             yk = gk_new_array - gk_old_array;
             
             % BB1型步长
@@ -153,7 +153,7 @@ classdef BBOptimizer < BaseOptimizer
         
         function converged = check_bb_convergence(obj, gk, fk_new, fk)
             % 检查BB法收敛性
-            gk_array = utils.model_utils.struct2array(gk);
+            gk_array = utils.elastic_params_converter.struct2array(gk);
             grad_converged = norm(gk_array) < obj.tolerance;
             func_converged = abs(fk_new - fk)/fk < obj.tolerance;
             converged = grad_converged || func_converged;
@@ -175,9 +175,9 @@ classdef BBOptimizer < BaseOptimizer
             min_step = obj.bb_params.min_step;
             
             % 基于梯度和搜索方向的安全检查
-            grad_norm = norm(utils.model_utils.struct2array(gk));
+            grad_norm = norm(utils.elastic_params_converter.struct2array(gk));
             if grad_norm > 0
-                sk_norm = norm(utils.model_utils.struct2array(sk));
+                sk_norm = norm(utils.elastic_params_converter.struct2array(sk));
                 relative_step = sk_norm / grad_norm;
                 
                 % 调整步长确保相对步长在合理范围内
