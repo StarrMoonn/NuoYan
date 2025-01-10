@@ -5,6 +5,8 @@ classdef guiabout_exported < matlab.apps.AppBase
         UIFigure         matlab.ui.Figure
         GridLayout       matlab.ui.container.GridLayout
         LeftPanel        matlab.ui.container.Panel
+        Label_4          matlab.ui.control.Label
+        Label_3          matlab.ui.control.Label
         VTILabel         matlab.ui.control.Label
         V01Label         matlab.ui.control.Label
         Label_2          matlab.ui.control.Label
@@ -22,7 +24,7 @@ classdef guiabout_exported < matlab.apps.AppBase
     methods (Access = private)
 
         % Changes arrangement of the app based on UIFigure width
-        function updateAppLayout(app, ~)
+        function updateAppLayout(app, event)
             currentFigureWidth = app.UIFigure.Position(3);
             if(currentFigureWidth <= app.onePanelWidth)
                 % Change to a 2x1 grid
@@ -72,23 +74,33 @@ classdef guiabout_exported < matlab.apps.AppBase
 
             % Create StarrMoonnLabel
             app.StarrMoonnLabel = uilabel(app.LeftPanel);
-            app.StarrMoonnLabel.Position = [61 105 104 33];
+            app.StarrMoonnLabel.Position = [55 204 104 33];
             app.StarrMoonnLabel.Text = '作者：StarrMoonn';
 
             % Create Label_2
             app.Label_2 = uilabel(app.LeftPanel);
-            app.Label_2.Position = [60 63 101 33];
+            app.Label_2.Position = [54 162 101 33];
             app.Label_2.Text = '日期：2025.01.10';
 
             % Create V01Label
             app.V01Label = uilabel(app.LeftPanel);
-            app.V01Label.Position = [61 19 100 33];
+            app.V01Label.Position = [55 118 100 33];
             app.V01Label.Text = '版本：V0.1';
 
             % Create VTILabel
             app.VTILabel = uilabel(app.LeftPanel);
-            app.VTILabel.Position = [57 258 108 22];
+            app.VTILabel.Position = [54 253 108 22];
             app.VTILabel.Text = 'VTI介质全波形反演';
+
+            % Create Label_3
+            app.Label_3 = uilabel(app.LeftPanel);
+            app.Label_3.Position = [47 72 121 22];
+            app.Label_3.Text = '最 是 人 间 留 不 住，';
+
+            % Create Label_4
+            app.Label_4 = uilabel(app.LeftPanel);
+            app.Label_4.Position = [47 40 121 22];
+            app.Label_4.Text = '朱 颜 辞 镜 花 辞 树！';
 
             % Create RightPanel
             app.RightPanel = uipanel(app.GridLayout);
