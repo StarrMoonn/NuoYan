@@ -9,22 +9,47 @@ try
     cd(project_root);
     addpath(project_root);
     
-    % 设置FWI参数
-    fwi_params = struct();
-    fwi_params.max_iterations = 20;     % 最大迭代次数
-    fwi_params.tolerance = 0.1;        % 收敛容差（10%）
-    fwi_params.verbose = true;          % 是否输出详细信息
+    % 创建输出目录
+    output_dir = fullfile(project_root, 'output');
+    gradient_output_dir = fullfile(output_dir, 'gradients');
+    misfit_output_dir = fullfile(output_dir, 'misfits');
     
-    % 加载参数
-    params = struct();
-    params.obs_json_file = fullfile(project_root, 'data', 'params', 'case2', 'params_obs.json');
-    params.syn_json_file = fullfile(project_root, 'data', 'params', 'case3', 'params_syn.json');
-    params.project_root = project_root;
-    params.fwi = fwi_params;  % 将FWI参数添加到params结构体中
+    % 确保输出目录存在
+    if ~exist(output_dir, 'dir'), mkdir(output_dir); end
+    if ~exist(gradient_output_dir, 'dir'), mkdir(gradient_output_dir); end
+    if ~exist(misfit_output_dir, 'dir'), mkdir(misfit_output_dir); end
     
-    % 创建FWI实例并运行
-    fwi = VTI_FWI(params);
+    % 设置优化器参数
+    optimizer_params = struct();
+    optimizer_params.max_iterations = 20;     % 最大迭代次数
+    optimizer_params.tolerance = 0.1;         % 收敛容差（10%）
+    optimizer_params.output_dir = output_dir;
+    optimizer_params.gradient_output_dir = gradient_output_dir;
+    optimizer_params.misfit_output_dir = misfit_output_dir;
+    
+    % BB法特有参数
+    optimizer_params.bb_params = struct();
+    optimizer_params.bb_params.initial_step = 0.1;
+    optimizer_params.bb_params.memory_length = 5;
+    optimizer_params.bb_params.max_step = 1.0;
+    optimizer_params.bb_params.min_step = 1e-6;
+    
+    % 设置优化方法
+    optimizer_params.optimization_method = 'BB';  % 可选: 'gradient_descent', 'BB', 'LBFGS'
+    
+    % 加载模型参数
+    optimizer_params.obs_json_file = fullfile(project_root, 'data', 'params', 'case2', 'params_obs.json');
+    optimizer_params.syn_json_file = fullfile(project_root, 'data', 'params', 'case3', 'params_syn.json');
+    
+    % 创建梯度求解器（假设这是必需的）
+    gradient_solver = GradientSolver(optimizer_params);  % 需要确保这个类存在
+    optimizer_params.gradient_solver = gradient_solver;
+    
+    % 创建并运行FWI
+    fwi = VTI_FWI(optimizer_params);
     fwi.run();
+    
+    fprintf('\n=== FWI测试完成 ===\n');
     
 catch ME
     fprintf('\n=== 测试失败 ===\n');
