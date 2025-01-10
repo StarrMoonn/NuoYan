@@ -37,7 +37,7 @@
 % 注意事项：
 %   - 该类为抽象基类，不能直接实例化
 %   - 必须通过子类实现run()方法
-% -------------------------------------------------------------------------
+% 
 % 输入参数：
 %   params结构体必须包含：
 %   - gradient_solver：梯度计算器实例
@@ -46,20 +46,20 @@
 %   - output_dir：输出目录
 %   - gradient_output_dir：梯度输出目录
 %   - misfit_output_dir：残差输出目录
-% -------------------------------------------------------------------------
+% 
 % 输出：
 %   - 迭代梯度：保存在gradient_output_dir
 %   - 目标函数值：保存在misfit_output_dir
 %   - 收敛曲线：以图片形式保存
-% -------------------------------------------------------------------------
+% 
 % 作者：starrmoonn
 % 日期：2025-01-10
 % 
 
 classdef BaseOptimizer < handle
     properties
-        gradient_solver         % 梯度计算器
-        max_iterations         % 最大迭代次数
+        gradient_solver       % 梯度计算实例
+        max_iterations        % 最大迭代次数
         tolerance             % 收敛容差
         output_dir            % 输出目录
         gradient_output_dir   % 梯度输出目录
@@ -74,12 +74,28 @@ classdef BaseOptimizer < handle
     methods
         function obj = BaseOptimizer(params)
             % 构造函数
-            obj.gradient_solver = params.gradient_solver;
-            obj.max_iterations = params.max_iterations;
-            obj.tolerance = params.tolerance;
-            obj.output_dir = params.output_dir;
-            obj.gradient_output_dir = params.gradient_output_dir;
-            obj.misfit_output_dir = params.misfit_output_dir;
+            % 创建梯度计算实例
+            obj.gradient_solver = GradientSolver(params);  % 假设有GradientSolver类
+            
+            % 设置默认参数
+            obj.max_iterations = 50;  % 默认最大迭代次数
+            obj.tolerance = 0.1;  % 默认收敛容差
+         
+            % 设置输出目录
+            obj.output_dir = fullfile(params.project_root, 'data', 'output', 'fwi');
+            obj.gradient_output_dir = fullfile(params.project_root, 'data', 'output', 'gradient');
+            obj.misfit_output_dir = fullfile(params.project_root, 'data', 'output', 'fwi_misfit');
+            
+            % 创建必要的目录
+            if ~exist(obj.output_dir, 'dir')
+                mkdir(obj.output_dir);
+            end
+            if ~exist(obj.gradient_output_dir, 'dir')
+                mkdir(obj.gradient_output_dir);
+            end
+            if ~exist(obj.misfit_output_dir, 'dir')
+                mkdir(obj.misfit_output_dir);
+            end
         end
         
         % === 公共计算函数 ===

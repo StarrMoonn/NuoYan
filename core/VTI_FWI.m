@@ -25,7 +25,7 @@ classdef VTI_FWI < handle
     
     methods
         function obj = VTI_FWI(params)
-            % 构造函数：根据选择创建相应的优化器
+            % 初始化为梯度下降法优化器
             obj.optimizer = GradientDescentOptimizer(params);
               
             % 如果指定了优化方法，根据指定方法创建优化器
