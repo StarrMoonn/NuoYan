@@ -58,7 +58,7 @@
 
 classdef BaseOptimizer < handle
     properties
-        gradient_solver       % 梯度计算实例 (VTI_Gradient)
+        gradient_solver       % 梯度计算实例
         max_iterations        % 最大迭代次数
         tolerance             % 收敛容差
         output_dir            % 输出目录
@@ -172,7 +172,6 @@ classdef BaseOptimizer < handle
             syn_params.rho = model.rho;
         end
 
-        % === 通用工具函数 ===
         function [total_improvement, iter_improvement] = compute_improvements(~, initial_misfit, previous_misfit, current_misfit)
             total_improvement = (initial_misfit - current_misfit) / initial_misfit * 100;
             iter_improvement = (previous_misfit - current_misfit) / previous_misfit * 100;
@@ -219,32 +218,6 @@ classdef BaseOptimizer < handle
             savefig(fullfile(obj.misfit_output_dir, 'convergence_curve.fig'));
             saveas(gcf, fullfile(obj.misfit_output_dir, 'convergence_curve.png'));
             fprintf('收敛曲线已保存到: %s\n', obj.misfit_output_dir);
-        end
-    end
-    
-    methods (Access = protected)
-        % 子类可以访问的辅助方法
-        function [nx, ny] = get_model_size(obj)
-            nx = size(obj.gradient_solver.adjoint_solver.syn_params.c11, 1);
-            ny = size(obj.gradient_solver.adjoint_solver.syn_params.c11, 2);
-        end
-        
-        function model = get_current_model(obj)
-            syn_params = obj.gradient_solver.adjoint_solver.syn_params;
-            model = struct('c11', syn_params.c11, ...
-                         'c13', syn_params.c13, ...
-                         'c33', syn_params.c33, ...
-                         'c44', syn_params.c44, ...
-                         'rho', syn_params.rho);
-        end
-        
-        function set_current_model(obj, model)
-            syn_params = obj.gradient_solver.adjoint_solver.syn_params;
-            syn_params.c11 = model.c11;
-            syn_params.c13 = model.c13;
-            syn_params.c33 = model.c33;
-            syn_params.c44 = model.c44;
-            syn_params.rho = model.rho;
         end
     end
 end 
