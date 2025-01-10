@@ -1,0 +1,159 @@
+#include "mex.h"
+#include <cmath>
+#include <cstring>
+
+// 计算波场传播的核心函数
+void compute_wave_propagation_cpu(double *vx, double *vy, double *sigmaxx, double *sigmayy, double *sigmaxy,
+                                   double *memory_dvx_dx, double *memory_dvy_dy, double *memory_dvy_dx, double *memory_dvx_dy,
+                                   double *memory_dsigmaxx_dx, double *memory_dsigmaxy_dy, double *memory_dsigmaxy_dx, double *memory_dsigmayy_dy,
+                                   double *c11, double *c13, double *c33, double *c44, double *rho,
+                                   double *b_x, double *b_y, double *b_x_half, double *b_y_half,
+                                   double *a_x, double *a_y, double *a_x_half, double *a_y_half,
+                                   double *K_x, double *K_y, double *K_x_half, double *K_y_half,
+                                   double DELTAX, double DELTAY, double DELTAT, int NX, int NY) {
+
+    int i, j;
+
+    // 计算应力场 sigmaxx 和 sigmayy
+    for (j = 1; j < NY; j++) {
+        for (i = 0; i < NX - 1; i++) {
+            double value_dvx_dx = (vx[(i + 1) + j * NX] - vx[i + j * NX]) / DELTAX;
+            double value_dvy_dy = (vy[i + j * NX] - vy[i + (j - 1) * NX]) / DELTAY;
+
+            memory_dvx_dx[i + j * NX] = b_x_half[i] * memory_dvx_dx[i + j * NX] + 
+                                       a_x_half[i] * value_dvx_dx;
+            memory_dvy_dy[i + j * NX] = b_y[j] * memory_dvy_dy[i + j * NX] + 
+                                       a_y[j] * value_dvy_dy;
+
+            value_dvx_dx = value_dvx_dx / K_x_half[i] + memory_dvx_dx[i + j * NX];
+            value_dvy_dy = value_dvy_dy / K_y[j] + memory_dvy_dy[i + j * NX];
+
+            sigmaxx[i + j * NX] += DELTAT * (
+                c11[i + j * NX] * value_dvx_dx + 
+                c13[i + j * NX] * value_dvy_dy
+            );
+            
+            sigmayy[i + j * NX] += DELTAT * (
+                c13[i + j * NX] * value_dvx_dx + 
+                c33[i + j * NX] * value_dvy_dy
+            );
+        }
+    }
+
+    // 计算剪应力 sigmaxy
+    for (j = 0; j < NY - 1; j++) {
+        for (i = 1; i < NX; i++) {
+            double value_dvy_dx = (vy[i + j * NX] - vy[(i - 1) + j * NX]) / DELTAX;
+            double value_dvx_dy = (vx[i + (j + 1) * NX] - vx[i + j * NX]) / DELTAY;
+
+            memory_dvy_dx[i + j * NX] = b_x[i] * memory_dvy_dx[i + j * NX] + 
+                                       a_x[i] * value_dvy_dx;
+            memory_dvx_dy[i + j * NX] = b_y_half[j] * memory_dvx_dy[i + j * NX] + 
+                                       a_y_half[j] * value_dvx_dy;
+
+            value_dvy_dx = value_dvy_dx / K_x[i] + memory_dvy_dx[i + j * NX];
+            value_dvx_dy = value_dvx_dy / K_y_half[j] + memory_dvx_dy[i + j * NX];
+
+            sigmaxy[i + j * NX] += c44[i + j * NX] * (value_dvy_dx + value_dvx_dy) * DELTAT;
+        }
+    }
+
+    // 计算 x 方向速度场
+    for (j = 1; j < NY; j++) {
+        for (i = 1; i < NX; i++) {
+            double value_dsigmaxx_dx = (sigmaxx[i + j * NX] - sigmaxx[(i - 1) + j * NX]) / DELTAX;
+            double value_dsigmaxy_dy = (sigmaxy[i + j * NX] - sigmaxy[i + (j - 1) * NX]) / DELTAY;
+
+            memory_dsigmaxx_dx[i + j * NX] = b_x[i] * memory_dsigmaxx_dx[i + j * NX] + 
+                                            a_x[i] * value_dsigmaxx_dx;
+            memory_dsigmaxy_dy[i + j * NX] = b_y[j] * memory_dsigmaxy_dy[i + j * NX] + 
+                                            a_y[j] * value_dsigmaxy_dy;
+
+            value_dsigmaxx_dx = value_dsigmaxx_dx / K_x[i] + memory_dsigmaxx_dx[i + j * NX];
+            value_dsigmaxy_dy = value_dsigmaxy_dy / K_y[j] + memory_dsigmaxy_dy[i + j * NX];
+
+            vx[i + j * NX] += (value_dsigmaxx_dx + value_dsigmaxy_dy) * DELTAT / rho[i + j * NX];
+        }
+    }
+
+    // 计算 y 方向速度场
+    for (j = 0; j < NY - 1; j++) {
+        for (i = 0; i < NX - 1; i++) {
+            double value_dsigmaxy_dx = (sigmaxy[(i + 1) + j * NX] - sigmaxy[i + j * NX]) / DELTAX;
+            double value_dsigmayy_dy = (sigmayy[i + (j + 1) * NX] - sigmayy[i + j * NX]) / DELTAY;
+
+            memory_dsigmaxy_dx[i + j * NX] = b_x_half[i] * memory_dsigmaxy_dx[i + j * NX] + 
+                                            a_x_half[i] * value_dsigmaxy_dx;
+            memory_dsigmayy_dy[i + j * NX] = b_y_half[j] * memory_dsigmayy_dy[i + j * NX] + 
+                                            a_y_half[j] * value_dsigmayy_dy;
+
+            value_dsigmaxy_dx = value_dsigmaxy_dx / K_x_half[i] + memory_dsigmaxy_dx[i + j * NX];
+            value_dsigmayy_dy = value_dsigmayy_dy / K_y_half[j] + memory_dsigmayy_dy[i + j * NX];
+
+            vy[i + j * NX] += (value_dsigmaxy_dx + value_dsigmayy_dy) * DELTAT / rho[i + j * NX];
+        }
+    }
+}
+
+// MEX接口函数
+void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
+    // 获取输入参数
+    double *vx = mxGetPr(prhs[0]);
+    double *vy = mxGetPr(prhs[1]);
+    double *sigmaxx = mxGetPr(prhs[2]);
+    double *sigmayy = mxGetPr(prhs[3]);
+    double *sigmaxy = mxGetPr(prhs[4]);
+
+    // 其他输入参数（这些参数需要根据你的数据传递）
+    double *memory_dvx_dx = mxGetPr(prhs[5]);
+    double *memory_dvy_dy = mxGetPr(prhs[6]);
+    double *memory_dvy_dx = mxGetPr(prhs[7]);
+    double *memory_dvx_dy = mxGetPr(prhs[8]);
+    double *memory_dsigmaxx_dx = mxGetPr(prhs[9]);
+    double *memory_dsigmaxy_dy = mxGetPr(prhs[10]);
+    double *memory_dsigmaxy_dx = mxGetPr(prhs[11]);
+    double *memory_dsigmayy_dy = mxGetPr(prhs[12]);
+    
+    // 其他变量
+    double *c11 = mxGetPr(prhs[13]);
+    double *c13 = mxGetPr(prhs[14]);
+    double *c33 = mxGetPr(prhs[15]);
+    double *c44 = mxGetPr(prhs[16]);
+    double *rho = mxGetPr(prhs[17]);
+    double *b_x = mxGetPr(prhs[18]);
+    double *b_y = mxGetPr(prhs[19]);
+    double *b_x_half = mxGetPr(prhs[20]);
+    double *b_y_half = mxGetPr(prhs[21]);
+    double *a_x = mxGetPr(prhs[22]);
+    double *a_y = mxGetPr(prhs[23]);
+    double *a_x_half = mxGetPr(prhs[24]);
+    double *a_y_half = mxGetPr(prhs[25]);
+    double *K_x = mxGetPr(prhs[26]);
+    double *K_y = mxGetPr(prhs[27]);
+    double *K_x_half = mxGetPr(prhs[28]);
+    double *K_y_half = mxGetPr(prhs[29]);
+
+    // 计算参数
+    double DELTAX = mxGetScalar(prhs[30]);
+    double DELTAY = mxGetScalar(prhs[31]);
+    double DELTAT = mxGetScalar(prhs[32]);
+    int NX = static_cast<int>(mxGetScalar(prhs[33]));
+    int NY = static_cast<int>(mxGetScalar(prhs[34]));
+
+    // 调用计算函数
+    compute_wave_propagation_cpu(vx, vy, sigmaxx, sigmayy, sigmaxy,
+                                  memory_dvx_dx, memory_dvy_dy, memory_dvy_dx, memory_dvx_dy,
+                                  memory_dsigmaxx_dx, memory_dsigmaxy_dy, memory_dsigmaxy_dx, memory_dsigmayy_dy,
+                                  c11, c13, c33, c44, rho,
+                                  b_x, b_y, b_x_half, b_y_half,
+                                  a_x, a_y, a_x_half, a_y_half,
+                                  K_x, K_y, K_x_half, K_y_half,
+                                  DELTAX, DELTAY, DELTAT, NX, NY);
+    
+    // 设置输出矩阵
+    plhs[0] = mxCreateDoubleMatrix(NY, NX, mxREAL);
+    memcpy(mxGetPr(plhs[0]), vx, NX * NY * sizeof(double));
+
+    plhs[1] = mxCreateDoubleMatrix(NY, NX, mxREAL);
+    memcpy(mxGetPr(plhs[1]), vy, NX * NY * sizeof(double));
+}
