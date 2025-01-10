@@ -52,7 +52,7 @@
 %   - 目标函数值：保存在misfit_output_dir
 %   - 收敛曲线：以图片形式保存
 % 
-% 作者：starrmoonn
+% 作者：StarrMoonn
 % 日期：2025-01-10
 % 
 

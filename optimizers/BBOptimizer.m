@@ -38,7 +38,7 @@
 %    d) 收敛检查：
 %       - 检查梯度范数
 %       - 评估函数值相对变化
-% -------------------------------------------------------------------------
+% 
 % 输入参数：
 %   params结构体必须包含：
 %   - 继承自BaseOptimizer的所有参数
@@ -46,20 +46,21 @@
 %   - initial_step：初始步长（默认1e-3）
 %   - min_step：最小步长（默认1e-6）
 %   - max_step：最大步长（默认1.0）
-% -------------------------------------------------------------------------
+% 
 % 输出：
 %   - 优化后的模型参数
 %   - 迭代历史记录
 %   - 收敛曲线
-% -------------------------------------------------------------------------
-% 作者：starrmoonn
+% 
+% 作者：StarrMoonn
 % 日期：2025-01-10
-% =========================================================================
+% 
 
 classdef BBOptimizer < BaseOptimizer
     properties
         bb_params              % BB法参数
         misfit_history         % 目标函数值历史
+        gk_old_array          % 当前梯度的数组形式
     end
     
     methods
@@ -68,6 +69,7 @@ classdef BBOptimizer < BaseOptimizer
             obj = obj@BaseOptimizer(params);
             obj.bb_params = params.bb_params;
             obj.misfit_history = [];
+            obj.gk_old_array = [];
         end
         
         function run(obj)
@@ -81,9 +83,8 @@ classdef BBOptimizer < BaseOptimizer
             
             % 主迭代循环
             for iter = 1:obj.max_iterations
-                % 保存当前状态
-                gk_old_array = utils.elastic_params_converter.struct2array(gk);
-                current_model = obj.get_current_model();
+                % 保存当前梯度
+                obj.gk_old_array = utils.elastic_params_converter.struct2array(gk);
                 
                 % BB迭代
                 [fk_new, gk_new, tk_new] = obj.bb_iteration(iter, gk, tk);
@@ -116,9 +117,8 @@ classdef BBOptimizer < BaseOptimizer
         function [fk_new, gk_new, tk_new] = bb_iteration(obj, iter, gk, tk)
             fprintf('\n=== BB法迭代 %d/%d ===\n', iter, obj.max_iterations);
             
-            % 保存当前状态
-            gk_old_array = utils.elastic_params_converter.struct2array(gk);
-            current_model = obj.get_current_model();
+            % 使用工具类进行参数转换
+            obj.gk_old_array = utils.elastic_params_converter.struct2array(gk);
             
             % 计算BB方向
             sk = obj.compute_BB_step(gk, tk);
@@ -127,7 +127,7 @@ classdef BBOptimizer < BaseOptimizer
             tk = obj.safeguard_step(tk, sk, gk);
             
             % 非单调线搜索
-            [fk_new, ~] = obj.nonmonotone_linesearch(obj.compute_misfit(), gk, tk, obj.bb_params.memory_length);
+            [fk_new, ~] = obj.nonmonotone_linesearch(fk, gk, tk);
             
             % 计算新梯度
             gk_new = obj.compute_total_gradient();
@@ -135,7 +135,7 @@ classdef BBOptimizer < BaseOptimizer
             % 更新BB步长（BB1型或BB2型）
             gk_new_array = utils.elastic_params_converter.struct2array(gk_new);
             sk_array = utils.elastic_params_converter.struct2array(sk);
-            yk = gk_new_array - gk_old_array;
+            yk = gk_new_array - obj.gk_old_array;
             
             % BB1型步长
             tk_new = abs(sk_array' * yk) / (yk' * yk);
@@ -159,7 +159,7 @@ classdef BBOptimizer < BaseOptimizer
             converged = grad_converged || func_converged;
         end
         
-        function sk = compute_BB_step(obj, gk, tk)
+        function sk = compute_BB_step(~, gk, tk)
             % 计算BB搜索方向
             sk = struct();
             sk.c11 = -tk * gk.c11;
@@ -189,32 +189,34 @@ classdef BBOptimizer < BaseOptimizer
             end
         end
         
-        function [fk_new, model_new] = nonmonotone_linesearch(obj, fk, gk, tk, max_memory)
-            % 非单调线搜索
-            % 使用最近max_memory次迭代中的最大函数值作为参考
-            
-            % 计算搜索方向
+        function [fk_new] = nonmonotone_linesearch(obj, fk, gk, tk)
+            % 直接使用类属性中的memory_length
+            % 不再需要作为参数传入
             sk = obj.compute_BB_step(gk, tk);
             
-            % 更新模型并计算新的函数值
+            % 保存当前模型以便回退
             current_model = obj.get_current_model();
+            
+            % 更新模型并计算新的函数值
             obj.update_model_with_BB_step(sk);
             fk_new = obj.compute_misfit();
             
             % 如果新的函数值不满足非单调准则，回退步长
-            if ~obj.check_nonmonotone_condition(fk_new, fk, max_memory)
+            if ~obj.check_nonmonotone_condition(fk_new, fk)
                 tk = tk * 0.5;
                 obj.set_current_model(current_model);
-                [fk_new, ~] = obj.nonmonotone_linesearch(fk, gk, tk, max_memory);
+                fk_new = obj.nonmonotone_linesearch(fk, gk, tk);
             end
         end
         
-        function satisfied = check_nonmonotone_condition(obj, fk_new, fk, max_memory)
-            % 检查非单调条件
+        function satisfied = check_nonmonotone_condition(obj, fk_new, fk)
+            % 使用类中的参数
             if isempty(obj.misfit_history)
                 satisfied = fk_new <= fk;
             else
-                max_previous = max(obj.misfit_history);
+                % 使用类属性中的memory_length
+                recent_history = obj.misfit_history(max(1,end-obj.bb_params.memory_length+1):end);
+                max_previous = max(recent_history);
                 satisfied = fk_new <= max_previous;
             end
         end

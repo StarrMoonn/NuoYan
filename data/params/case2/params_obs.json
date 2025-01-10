@@ -73,5 +73,13 @@
     "// FWI参数设置": null,
     "optimization": "gradient_descent",
     "max_iterations": 20,
-    "tolerance": 0.1
+    "tolerance": 0.1,
+
+    "// BB优化器参数": null,
+    "bb_params": {
+        "initial_step": 0.1,
+        "memory_length": 5,    
+        "max_step": 1.0,
+        "min_step": 1e-6
+    }
 } 
