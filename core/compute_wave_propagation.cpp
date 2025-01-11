@@ -151,9 +151,9 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {
                                   DELTAX, DELTAY, DELTAT, NX, NY);
     
     // 设置输出矩阵
-    plhs[0] = mxCreateDoubleMatrix(NY, NX, mxREAL);
+    plhs[0] = mxCreateDoubleMatrix(NX, NY, mxREAL);
     memcpy(mxGetPr(plhs[0]), vx, NX * NY * sizeof(double));
 
-    plhs[1] = mxCreateDoubleMatrix(NY, NX, mxREAL);
+    plhs[1] = mxCreateDoubleMatrix(NX, NY, mxREAL);
     memcpy(mxGetPr(plhs[1]), vy, NX * NY * sizeof(double));
 }
