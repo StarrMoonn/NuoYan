@@ -88,6 +88,10 @@ params.save_snapshots = true;
 % 当前炮号（用于测试）
 ishot = 2;  
 
+% 计算模式：'cpu' or 'cpu_mex' or 'cuda_mex'
+params.compute_kernel = 'cpu_mex';  
+%params.compute_kernel = 'cpu'; 
+
 fprintf('\n=== 创建VTI_Forward实例 ===\n');
 forward_solver = VTI_SingleShotModeling(params);
 
