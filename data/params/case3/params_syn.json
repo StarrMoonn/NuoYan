@@ -63,7 +63,7 @@
     "// 输出控制参数": null,
     "IT_DISPLAY": 100,
     "save_snapshots": true,
-    "compute_mode": "cpu_parallel",
+    "compute_kernel": "cpu_mex",
 
     "adjoint_params": {
         "save_adjoint_snapshots": true,
