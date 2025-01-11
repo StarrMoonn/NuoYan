@@ -2,7 +2,7 @@
 
 相逢何必曾相识。
 
-![一生热爱](gui/aesets/logo_zhanqiao.jpg)
+![一生热爱](gui/assets/logo_zhanqiao.jpg)
 
 
 
