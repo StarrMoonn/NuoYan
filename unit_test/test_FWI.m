@@ -4,9 +4,11 @@ clear;
 clc;
 
 try
-    % 设置项目根目录
-    project_root = 'E:\Matlab\VTI_project';
-    cd(project_root);
+    % 获取当前脚本的路径
+    [script_path, ~, ~] = fileparts(mfilename('fullpath'));
+    
+    % 设置项目根目录为当前脚本的上级目录
+    project_root = fileparts(script_path);
     addpath(project_root);
     
     % 创建输出目录
@@ -40,6 +42,15 @@ try
     % 加载模型参数
     optimizer_params.obs_json_file = fullfile(project_root, 'data', 'params', 'case2', 'params_obs.json');
     optimizer_params.syn_json_file = fullfile(project_root, 'data', 'params', 'case3', 'params_syn.json');
+    
+    % 验证JSON文件是否存在
+    if ~exist(optimizer_params.obs_json_file, 'file')
+        error('无法找到观测数据JSON文件: %s', optimizer_params.obs_json_file);
+    end
+    
+    if ~exist(optimizer_params.syn_json_file, 'file')
+        error('无法找到合成数据JSON文件: %s', optimizer_params.syn_json_file);
+    end
     
     % 创建梯度求解器（假设这是必需的）
     gradient_solver = GradientSolver(optimizer_params);  % 需要确保这个类存在

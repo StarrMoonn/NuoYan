@@ -47,21 +47,27 @@ clear;
 clc;
 
 try
-    % 设置项目根目录
-    project_root = 'E:\Matlab\VTI_project';
-    cd(project_root);
+    % 获取当前脚本的路径
+    [script_path, ~, ~] = fileparts(mfilename('fullpath'));
+    
+    % 设置项目根目录为当前脚本的上级目录
+    project_root = fileparts(script_path);
     
     % 添加项目根目录到路径
     addpath(project_root);
-    
-    % 验证路径是否正确
-    if ~exist('VTI_Gradient', 'class')
-        error('无法找到 VTI_Gradient 类，请检查路径设置');
-    end
-    
-    % 指定两个JSON文件路径
+     
+    % 使用相对路径指定两个JSON文件路径
     obs_json_file = fullfile(project_root, 'data', 'params', 'case2', 'params_obs.json');
     syn_json_file = fullfile(project_root, 'data', 'params', 'case3', 'params_syn.json');
+    
+    % 验证JSON文件是否存在
+    if ~exist(obs_json_file, 'file')
+        error('无法找到观测数据JSON文件: %s', obs_json_file);
+    end
+    
+    if ~exist(syn_json_file, 'file')
+        error('无法找到合成数据JSON文件: %s', syn_json_file);
+    end
     
     % 使用utils.load_json_params加载参数
     fprintf('\n=== 加载参数文件 ===\n');

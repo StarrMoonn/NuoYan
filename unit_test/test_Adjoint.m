@@ -54,11 +54,6 @@ project_root = fileparts(script_path);
 % 添加项目根目录到路径
 addpath(project_root);
 
-% 验证路径是否正确
-if ~exist('VTI_Adjoint', 'class')
-    error('无法找到 VTI_Adjoint 类，请检查路径设置');
-end
-
 % 使用相对路径指定两个JSON文件路径
 obs_json_file = fullfile(project_root, 'data', 'params', 'case2', 'params_obs.json');
 syn_json_file = fullfile(project_root, 'data', 'params', 'case3', 'params_syn.json');
