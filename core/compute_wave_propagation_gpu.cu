@@ -139,167 +139,6 @@ __global__ void compute_velocity_y_kernel(
     }
 }
 
-// 主计算函数
-void compute_wave_propagation_gpu(
-    double *vx, double *vy, double *sigmaxx, double *sigmayy, double *sigmaxy,
-    double *memory_dvx_dx, double *memory_dvy_dy, double *memory_dvy_dx, double *memory_dvx_dy,
-    double *memory_dsigmaxx_dx, double *memory_dsigmaxy_dy, double *memory_dsigmaxy_dx, double *memory_dsigmayy_dy,
-    double *c11, double *c13, double *c33, double *c44, double *rho,
-    double *b_x, double *b_y, double *b_x_half, double *b_y_half,
-    double *a_x, double *a_y, double *a_x_half, double *a_y_half,
-    double *K_x, double *K_y, double *K_x_half, double *K_y_half,
-    double DELTAX, double DELTAY, double DELTAT, int NX, int NY)
-{
-    // 分配GPU内存 - 2D数组
-    size_t size_2d = NX * NY * sizeof(double);
-    double *d_vx, *d_vy, *d_sigmaxx, *d_sigmayy, *d_sigmaxy;
-    CHECK_CUDA_ERROR(cudaMalloc(&d_vx, size_2d));
-    CHECK_CUDA_ERROR(cudaMalloc(&d_vy, size_2d));
-    CHECK_CUDA_ERROR(cudaMalloc(&d_sigmaxx, size_2d));
-    CHECK_CUDA_ERROR(cudaMalloc(&d_sigmayy, size_2d));
-    CHECK_CUDA_ERROR(cudaMalloc(&d_sigmaxy, size_2d));
-
-    // 分配内存变量
-    double *d_memory_dvx_dx, *d_memory_dvy_dy, *d_memory_dvy_dx, *d_memory_dvx_dy;
-    double *d_memory_dsigmaxx_dx, *d_memory_dsigmaxy_dy, *d_memory_dsigmaxy_dx, *d_memory_dsigmayy_dy;
-    CHECK_CUDA_ERROR(cudaMalloc(&d_memory_dvx_dx, size_2d));
-    CHECK_CUDA_ERROR(cudaMalloc(&d_memory_dvy_dy, size_2d));
-    CHECK_CUDA_ERROR(cudaMalloc(&d_memory_dvy_dx, size_2d));
-    CHECK_CUDA_ERROR(cudaMalloc(&d_memory_dvx_dy, size_2d));
-    CHECK_CUDA_ERROR(cudaMalloc(&d_memory_dsigmaxx_dx, size_2d));
-    CHECK_CUDA_ERROR(cudaMalloc(&d_memory_dsigmaxy_dy, size_2d));
-    CHECK_CUDA_ERROR(cudaMalloc(&d_memory_dsigmaxy_dx, size_2d));
-    CHECK_CUDA_ERROR(cudaMalloc(&d_memory_dsigmayy_dy, size_2d));
-
-    // 分配材料参数
-    double *d_c11, *d_c13, *d_c33, *d_c44, *d_rho;
-    CHECK_CUDA_ERROR(cudaMalloc(&d_c11, size_2d));
-    CHECK_CUDA_ERROR(cudaMalloc(&d_c13, size_2d));
-    CHECK_CUDA_ERROR(cudaMalloc(&d_c33, size_2d));
-    CHECK_CUDA_ERROR(cudaMalloc(&d_c44, size_2d));
-    CHECK_CUDA_ERROR(cudaMalloc(&d_rho, size_2d));
-
-    // 分配PML参数 - 1D数组
-    size_t size_1d_x = NX * sizeof(double);
-    size_t size_1d_y = NY * sizeof(double);
-    double *d_b_x, *d_b_y, *d_b_x_half, *d_b_y_half;
-    double *d_a_x, *d_a_y, *d_a_x_half, *d_a_y_half;
-    double *d_K_x, *d_K_y, *d_K_x_half, *d_K_y_half;
-    
-    CHECK_CUDA_ERROR(cudaMalloc(&d_b_x, size_1d_x));
-    CHECK_CUDA_ERROR(cudaMalloc(&d_b_y, size_1d_y));
-    CHECK_CUDA_ERROR(cudaMalloc(&d_b_x_half, size_1d_x));
-    CHECK_CUDA_ERROR(cudaMalloc(&d_b_y_half, size_1d_y));
-    CHECK_CUDA_ERROR(cudaMalloc(&d_a_x, size_1d_x));
-    CHECK_CUDA_ERROR(cudaMalloc(&d_a_y, size_1d_y));
-    CHECK_CUDA_ERROR(cudaMalloc(&d_a_x_half, size_1d_x));
-    CHECK_CUDA_ERROR(cudaMalloc(&d_a_y_half, size_1d_y));
-    CHECK_CUDA_ERROR(cudaMalloc(&d_K_x, size_1d_x));
-    CHECK_CUDA_ERROR(cudaMalloc(&d_K_y, size_1d_y));
-    CHECK_CUDA_ERROR(cudaMalloc(&d_K_x_half, size_1d_x));
-    CHECK_CUDA_ERROR(cudaMalloc(&d_K_y_half, size_1d_y));
-
-    // 复制数据到GPU - 2D数组
-    CHECK_CUDA_ERROR(cudaMemcpy(d_vx, vx, size_2d, cudaMemcpyHostToDevice));
-    CHECK_CUDA_ERROR(cudaMemcpy(d_vy, vy, size_2d, cudaMemcpyHostToDevice));
-    CHECK_CUDA_ERROR(cudaMemcpy(d_sigmaxx, sigmaxx, size_2d, cudaMemcpyHostToDevice));
-    CHECK_CUDA_ERROR(cudaMemcpy(d_sigmayy, sigmayy, size_2d, cudaMemcpyHostToDevice));
-    CHECK_CUDA_ERROR(cudaMemcpy(d_sigmaxy, sigmaxy, size_2d, cudaMemcpyHostToDevice));
-
-    // 复制内存变量
-    CHECK_CUDA_ERROR(cudaMemcpy(d_memory_dvx_dx, memory_dvx_dx, size_2d, cudaMemcpyHostToDevice));
-    CHECK_CUDA_ERROR(cudaMemcpy(d_memory_dvy_dy, memory_dvy_dy, size_2d, cudaMemcpyHostToDevice));
-    CHECK_CUDA_ERROR(cudaMemcpy(d_memory_dvy_dx, memory_dvy_dx, size_2d, cudaMemcpyHostToDevice));
-    CHECK_CUDA_ERROR(cudaMemcpy(d_memory_dvx_dy, memory_dvx_dy, size_2d, cudaMemcpyHostToDevice));
-    CHECK_CUDA_ERROR(cudaMemcpy(d_memory_dsigmaxx_dx, memory_dsigmaxx_dx, size_2d, cudaMemcpyHostToDevice));
-    CHECK_CUDA_ERROR(cudaMemcpy(d_memory_dsigmaxy_dy, memory_dsigmaxy_dy, size_2d, cudaMemcpyHostToDevice));
-    CHECK_CUDA_ERROR(cudaMemcpy(d_memory_dsigmaxy_dx, memory_dsigmaxy_dx, size_2d, cudaMemcpyHostToDevice));
-    CHECK_CUDA_ERROR(cudaMemcpy(d_memory_dsigmayy_dy, memory_dsigmayy_dy, size_2d, cudaMemcpyHostToDevice));
-
-    // 复制材料参数
-    CHECK_CUDA_ERROR(cudaMemcpy(d_c11, c11, size_2d, cudaMemcpyHostToDevice));
-    CHECK_CUDA_ERROR(cudaMemcpy(d_c13, c13, size_2d, cudaMemcpyHostToDevice));
-    CHECK_CUDA_ERROR(cudaMemcpy(d_c33, c33, size_2d, cudaMemcpyHostToDevice));
-    CHECK_CUDA_ERROR(cudaMemcpy(d_c44, c44, size_2d, cudaMemcpyHostToDevice));
-    CHECK_CUDA_ERROR(cudaMemcpy(d_rho, rho, size_2d, cudaMemcpyHostToDevice));
-
-    // 复制PML参数 - 1D数组
-    CHECK_CUDA_ERROR(cudaMemcpy(d_b_x, b_x, size_1d_x, cudaMemcpyHostToDevice));
-    CHECK_CUDA_ERROR(cudaMemcpy(d_b_y, b_y, size_1d_y, cudaMemcpyHostToDevice));
-    CHECK_CUDA_ERROR(cudaMemcpy(d_b_x_half, b_x_half, size_1d_x, cudaMemcpyHostToDevice));
-    CHECK_CUDA_ERROR(cudaMemcpy(d_b_y_half, b_y_half, size_1d_y, cudaMemcpyHostToDevice));
-    CHECK_CUDA_ERROR(cudaMemcpy(d_a_x, a_x, size_1d_x, cudaMemcpyHostToDevice));
-    CHECK_CUDA_ERROR(cudaMemcpy(d_a_y, a_y, size_1d_y, cudaMemcpyHostToDevice));
-    CHECK_CUDA_ERROR(cudaMemcpy(d_a_x_half, a_x_half, size_1d_x, cudaMemcpyHostToDevice));
-    CHECK_CUDA_ERROR(cudaMemcpy(d_a_y_half, a_y_half, size_1d_y, cudaMemcpyHostToDevice));
-    CHECK_CUDA_ERROR(cudaMemcpy(d_K_x, K_x, size_1d_x, cudaMemcpyHostToDevice));
-    CHECK_CUDA_ERROR(cudaMemcpy(d_K_y, K_y, size_1d_y, cudaMemcpyHostToDevice));
-    CHECK_CUDA_ERROR(cudaMemcpy(d_K_x_half, K_x_half, size_1d_x, cudaMemcpyHostToDevice));
-    CHECK_CUDA_ERROR(cudaMemcpy(d_K_y_half, K_y_half, size_1d_y, cudaMemcpyHostToDevice));
-
-    // 设置CUDA网格和块大小
-    dim3 blockSize(16, 16);
-    dim3 gridSize((NX + blockSize.x - 1) / blockSize.x, 
-                  (NY + blockSize.y - 1) / blockSize.y);
-
-    // 启动所有核函数
-    compute_stress_kernel<<<gridSize, blockSize>>>(
-        d_vx, d_vy, d_sigmaxx, d_sigmayy, d_sigmaxy,
-        d_memory_dvx_dx, d_memory_dvy_dy,
-        d_c11, d_c13, d_c33,
-        d_b_x_half, d_b_y, d_a_x_half, d_a_y,
-        d_K_x_half, d_K_y,
-        DELTAX, DELTAY, DELTAT, NX, NY);
-
-    compute_shear_stress_kernel<<<gridSize, blockSize>>>(
-        d_vx, d_vy, d_sigmaxy,
-        d_memory_dvy_dx, d_memory_dvx_dy,
-        d_c44,
-        d_b_x, d_b_y_half, d_a_x, d_a_y_half,
-        d_K_x, d_K_y_half,
-        DELTAX, DELTAY, DELTAT, NX, NY);
-
-    compute_velocity_x_kernel<<<gridSize, blockSize>>>(
-        d_vx, d_sigmaxx, d_sigmaxy,
-        d_memory_dsigmaxx_dx, d_memory_dsigmaxy_dy,
-        d_rho,
-        d_b_x, d_b_y, d_a_x, d_a_y,
-        d_K_x, d_K_y,
-        DELTAX, DELTAY, DELTAT, NX, NY);
-
-    compute_velocity_y_kernel<<<gridSize, blockSize>>>(
-        d_vy, d_sigmaxy, d_sigmayy,
-        d_memory_dsigmaxy_dx, d_memory_dsigmayy_dy,
-        d_rho,
-        d_b_x_half, d_b_y_half, d_a_x_half, d_a_y_half,
-        d_K_x_half, d_K_y_half,
-        DELTAX, DELTAY, DELTAT, NX, NY);
-
-    // 检查核函数执行错误
-    CHECK_CUDA_ERROR(cudaGetLastError());
-    CHECK_CUDA_ERROR(cudaDeviceSynchronize());
-
-    // 复制结果回主机
-    CHECK_CUDA_ERROR(cudaMemcpy(vx, d_vx, size_2d, cudaMemcpyDeviceToHost));
-    CHECK_CUDA_ERROR(cudaMemcpy(vy, d_vy, size_2d, cudaMemcpyDeviceToHost));
-
-    // 释放所有GPU内存
-    cudaFree(d_vx); cudaFree(d_vy);
-    cudaFree(d_sigmaxx); cudaFree(d_sigmayy); cudaFree(d_sigmaxy);
-    cudaFree(d_memory_dvx_dx); cudaFree(d_memory_dvy_dy);
-    cudaFree(d_memory_dvy_dx); cudaFree(d_memory_dvx_dy);
-    cudaFree(d_memory_dsigmaxx_dx); cudaFree(d_memory_dsigmaxy_dy);
-    cudaFree(d_memory_dsigmaxy_dx); cudaFree(d_memory_dsigmayy_dy);
-    cudaFree(d_c11); cudaFree(d_c13); cudaFree(d_c33); cudaFree(d_c44);
-    cudaFree(d_rho);
-    cudaFree(d_b_x); cudaFree(d_b_y);
-    cudaFree(d_b_x_half); cudaFree(d_b_y_half);
-    cudaFree(d_a_x); cudaFree(d_a_y);
-    cudaFree(d_a_x_half); cudaFree(d_a_y_half);
-    cudaFree(d_K_x); cudaFree(d_K_y);
-    cudaFree(d_K_x_half); cudaFree(d_K_y_half);
-}
-
 // MEX入口函数
 void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
 {
@@ -358,15 +197,142 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
     double *K_x_half = mxGetPr(prhs[28]);
     double *K_y_half = mxGetPr(prhs[29]);
 
-    // 调用GPU计算函数
-    compute_wave_propagation_gpu(vx, vy, sigmaxx, sigmayy, sigmaxy,
-                               memory_dvx_dx, memory_dvy_dy, memory_dvy_dx, memory_dvx_dy,
-                               memory_dsigmaxx_dx, memory_dsigmaxy_dy, memory_dsigmaxy_dx, memory_dsigmayy_dy,
-                               c11, c13, c33, c44, rho,
-                               b_x, b_y, b_x_half, b_y_half,
-                               a_x, a_y, a_x_half, a_y_half,
-                               K_x, K_y, K_x_half, K_y_half,
-                               DELTAX, DELTAY, DELTAT, NX, NY);
+    // 分配GPU内存 - 2D数组
+    size_t size_2d = NX * NY * sizeof(double);
+    double *d_vx, *d_vy, *d_sigmaxx, *d_sigmayy, *d_sigmaxy;
+    CHECK_CUDA_ERROR(cudaMalloc(&d_vx, size_2d));
+    CHECK_CUDA_ERROR(cudaMalloc(&d_vy, size_2d));
+    CHECK_CUDA_ERROR(cudaMalloc(&d_sigmaxx, size_2d));
+    CHECK_CUDA_ERROR(cudaMalloc(&d_sigmayy, size_2d));
+    CHECK_CUDA_ERROR(cudaMalloc(&d_sigmaxy, size_2d));
+
+    // 分配内存变量
+    double *d_memory_dvx_dx, *d_memory_dvy_dy, *d_memory_dvy_dx, *d_memory_dvx_dy;
+    double *d_memory_dsigmaxx_dx, *d_memory_dsigmaxy_dy, *d_memory_dsigmaxy_dx, *d_memory_dsigmayy_dy;
+    CHECK_CUDA_ERROR(cudaMalloc(&d_memory_dvx_dx, size_2d));
+    CHECK_CUDA_ERROR(cudaMalloc(&d_memory_dvy_dy, size_2d));
+    CHECK_CUDA_ERROR(cudaMalloc(&d_memory_dvy_dx, size_2d));
+    CHECK_CUDA_ERROR(cudaMalloc(&d_memory_dvx_dy, size_2d));
+    CHECK_CUDA_ERROR(cudaMalloc(&d_memory_dsigmaxx_dx, size_2d));
+    CHECK_CUDA_ERROR(cudaMalloc(&d_memory_dsigmaxy_dy, size_2d));
+    CHECK_CUDA_ERROR(cudaMalloc(&d_memory_dsigmaxy_dx, size_2d));
+    CHECK_CUDA_ERROR(cudaMalloc(&d_memory_dsigmayy_dy, size_2d));
+
+    // 复制数据到GPU - 2D数组
+    CHECK_CUDA_ERROR(cudaMemcpy(d_vx, vx, size_2d, cudaMemcpyHostToDevice));
+    CHECK_CUDA_ERROR(cudaMemcpy(d_vy, vy, size_2d, cudaMemcpyHostToDevice));
+    CHECK_CUDA_ERROR(cudaMemcpy(d_sigmaxx, sigmaxx, size_2d, cudaMemcpyHostToDevice));
+    CHECK_CUDA_ERROR(cudaMemcpy(d_sigmayy, sigmayy, size_2d, cudaMemcpyHostToDevice));
+    CHECK_CUDA_ERROR(cudaMemcpy(d_sigmaxy, sigmaxy, size_2d, cudaMemcpyHostToDevice));
+
+    // 复制内存变量
+    CHECK_CUDA_ERROR(cudaMemcpy(d_memory_dvx_dx, memory_dvx_dx, size_2d, cudaMemcpyHostToDevice));
+    CHECK_CUDA_ERROR(cudaMemcpy(d_memory_dvy_dy, memory_dvy_dy, size_2d, cudaMemcpyHostToDevice));
+    CHECK_CUDA_ERROR(cudaMemcpy(d_memory_dvy_dx, memory_dvy_dx, size_2d, cudaMemcpyHostToDevice));
+    CHECK_CUDA_ERROR(cudaMemcpy(d_memory_dvx_dy, memory_dvx_dy, size_2d, cudaMemcpyHostToDevice));
+    CHECK_CUDA_ERROR(cudaMemcpy(d_memory_dsigmaxx_dx, memory_dsigmaxx_dx, size_2d, cudaMemcpyHostToDevice));
+    CHECK_CUDA_ERROR(cudaMemcpy(d_memory_dsigmaxy_dy, memory_dsigmaxy_dy, size_2d, cudaMemcpyHostToDevice));
+    CHECK_CUDA_ERROR(cudaMemcpy(d_memory_dsigmaxy_dx, memory_dsigmaxy_dx, size_2d, cudaMemcpyHostToDevice));
+    CHECK_CUDA_ERROR(cudaMemcpy(d_memory_dsigmayy_dy, memory_dsigmayy_dy, size_2d, cudaMemcpyHostToDevice));
+
+    // 复制材料参数
+    CHECK_CUDA_ERROR(cudaMemcpy(d_c11, c11, size_2d, cudaMemcpyHostToDevice));
+    CHECK_CUDA_ERROR(cudaMemcpy(d_c13, c13, size_2d, cudaMemcpyHostToDevice));
+    CHECK_CUDA_ERROR(cudaMemcpy(d_c33, c33, size_2d, cudaMemcpyHostToDevice));
+    CHECK_CUDA_ERROR(cudaMemcpy(d_c44, c44, size_2d, cudaMemcpyHostToDevice));
+    CHECK_CUDA_ERROR(cudaMemcpy(d_rho, rho, size_2d, cudaMemcpyHostToDevice));
+
+    // 复制PML参数 - 1D数组
+    size_t size_1d_x = NX * sizeof(double);
+    size_t size_1d_y = NY * sizeof(double);
+    double *d_b_x, *d_b_y, *d_b_x_half, *d_b_y_half;
+    double *d_a_x, *d_a_y, *d_a_x_half, *d_a_y_half;
+    double *d_K_x, *d_K_y, *d_K_x_half, *d_K_y_half;
+    
+    CHECK_CUDA_ERROR(cudaMalloc(&d_b_x, size_1d_x));
+    CHECK_CUDA_ERROR(cudaMalloc(&d_b_y, size_1d_y));
+    CHECK_CUDA_ERROR(cudaMalloc(&d_b_x_half, size_1d_x));
+    CHECK_CUDA_ERROR(cudaMalloc(&d_b_y_half, size_1d_y));
+    CHECK_CUDA_ERROR(cudaMalloc(&d_a_x, size_1d_x));
+    CHECK_CUDA_ERROR(cudaMalloc(&d_a_y, size_1d_y));
+    CHECK_CUDA_ERROR(cudaMalloc(&d_a_x_half, size_1d_x));
+    CHECK_CUDA_ERROR(cudaMalloc(&d_a_y_half, size_1d_y));
+    CHECK_CUDA_ERROR(cudaMalloc(&d_K_x, size_1d_x));
+    CHECK_CUDA_ERROR(cudaMalloc(&d_K_y, size_1d_y));
+    CHECK_CUDA_ERROR(cudaMalloc(&d_K_x_half, size_1d_x));
+    CHECK_CUDA_ERROR(cudaMalloc(&d_K_y_half, size_1d_y));
+
+    // 复制PML参数 - 1D数组
+    CHECK_CUDA_ERROR(cudaMemcpy(d_b_x, b_x, size_1d_x, cudaMemcpyHostToDevice));
+    CHECK_CUDA_ERROR(cudaMemcpy(d_b_y, b_y, size_1d_y, cudaMemcpyHostToDevice));
+    CHECK_CUDA_ERROR(cudaMemcpy(d_b_x_half, b_x_half, size_1d_x, cudaMemcpyHostToDevice));
+    CHECK_CUDA_ERROR(cudaMemcpy(d_b_y_half, b_y_half, size_1d_y, cudaMemcpyHostToDevice));
+    CHECK_CUDA_ERROR(cudaMemcpy(d_a_x, a_x, size_1d_x, cudaMemcpyHostToDevice));
+    CHECK_CUDA_ERROR(cudaMemcpy(d_a_y, a_y, size_1d_y, cudaMemcpyHostToDevice));
+    CHECK_CUDA_ERROR(cudaMemcpy(d_a_x_half, a_x_half, size_1d_x, cudaMemcpyHostToDevice));
+    CHECK_CUDA_ERROR(cudaMemcpy(d_a_y_half, a_y_half, size_1d_y, cudaMemcpyHostToDevice));
+    CHECK_CUDA_ERROR(cudaMemcpy(d_K_x, K_x, size_1d_x, cudaMemcpyHostToDevice));
+    CHECK_CUDA_ERROR(cudaMemcpy(d_K_y, K_y, size_1d_y, cudaMemcpyHostToDevice));
+    CHECK_CUDA_ERROR(cudaMemcpy(d_K_x_half, K_x_half, size_1d_x, cudaMemcpyHostToDevice));
+    CHECK_CUDA_ERROR(cudaMemcpy(d_K_y_half, K_y_half, size_1d_y, cudaMemcpyHostToDevice));
+
+    // 设置线程块和网格大小
+    dim3 blockSize(16, 16);
+    dim3 gridSize((NX + blockSize.x - 1) / blockSize.x, 
+                  (NY + blockSize.y - 1) / blockSize.y);
+    
+    // 直接调用四个核函数
+    compute_stress_kernel<<<gridSize, blockSize>>>(d_vx, d_vy, d_sigmaxx, d_sigmayy, d_sigmaxy,
+                                                d_memory_dvx_dx, d_memory_dvy_dy,
+                                                d_c11, d_c13, d_c33,
+                                                d_b_x_half, d_b_y, d_a_x_half, d_a_y,
+                                                d_K_x_half, d_K_y,
+                                                DELTAX, DELTAY, DELTAT, NX, NY);
+
+    compute_shear_stress_kernel<<<gridSize, blockSize>>>(d_vx, d_vy, d_sigmaxy,
+                                                        d_memory_dvy_dx, d_memory_dvx_dy,
+                                                        d_c44,
+                                                        d_b_x, d_b_y_half, d_a_x, d_a_y_half,
+                                                        d_K_x, d_K_y_half,
+                                                        DELTAX, DELTAY, DELTAT, NX, NY);
+
+    compute_velocity_x_kernel<<<gridSize, blockSize>>>(d_vx, d_sigmaxx, d_sigmaxy,
+                                                      d_memory_dsigmaxx_dx, d_memory_dsigmaxy_dy,
+                                                      d_rho,
+                                                      d_b_x, d_b_y, d_a_x, d_a_y,
+                                                      d_K_x, d_K_y,
+                                                      DELTAX, DELTAY, DELTAT, NX, NY);
+
+    compute_velocity_y_kernel<<<gridSize, blockSize>>>(d_vy, d_sigmaxy, d_sigmayy,
+                                                      d_memory_dsigmaxy_dx, d_memory_dsigmayy_dy,
+                                                      d_rho,
+                                                      d_b_x_half, d_b_y_half, d_a_x_half, d_a_y_half,
+                                                      d_K_x_half, d_K_y_half,
+                                                      DELTAX, DELTAY, DELTAT, NX, NY);
+
+    // 检查核函数执行错误
+    CHECK_CUDA_ERROR(cudaGetLastError());
+    CHECK_CUDA_ERROR(cudaDeviceSynchronize());
+
+    // 复制结果回主机
+    CHECK_CUDA_ERROR(cudaMemcpy(vx, d_vx, size_2d, cudaMemcpyDeviceToHost));
+    CHECK_CUDA_ERROR(cudaMemcpy(vy, d_vy, size_2d, cudaMemcpyDeviceToHost));
+
+    // 释放所有GPU内存
+    cudaFree(d_vx); cudaFree(d_vy);
+    cudaFree(d_sigmaxx); cudaFree(d_sigmayy); cudaFree(d_sigmaxy);
+    cudaFree(d_memory_dvx_dx); cudaFree(d_memory_dvy_dy);
+    cudaFree(d_memory_dvy_dx); cudaFree(d_memory_dvx_dy);
+    cudaFree(d_memory_dsigmaxx_dx); cudaFree(d_memory_dsigmaxy_dy);
+    cudaFree(d_memory_dsigmaxy_dx); cudaFree(d_memory_dsigmayy_dy);
+    cudaFree(d_c11); cudaFree(d_c13); cudaFree(d_c33); cudaFree(d_c44);
+    cudaFree(d_rho);
+    cudaFree(d_b_x); cudaFree(d_b_y);
+    cudaFree(d_b_x_half); cudaFree(d_b_y_half);
+    cudaFree(d_a_x); cudaFree(d_a_y);
+    cudaFree(d_a_x_half); cudaFree(d_a_y_half);
+    cudaFree(d_K_x); cudaFree(d_K_y);
+    cudaFree(d_K_x_half); cudaFree(d_K_y_half);
 
     // 创建输出矩阵并复制结果
     plhs[0] = mxCreateDoubleMatrix(NX, NY, mxREAL);

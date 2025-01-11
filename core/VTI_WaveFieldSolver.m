@@ -768,12 +768,9 @@ classdef VTI_WaveFieldSolver < handle
             obj.vy = vy;
         end
         
-
-        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%可以删除了%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%  
         %{
         function compute_wave_propagation_gpu(obj)
         %}
-
 
         function apply_boundary_conditions(obj)
             % 应用Dirichlet边界条件（刚性边界）
