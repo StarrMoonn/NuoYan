@@ -109,43 +109,7 @@ classdef VTI_WaveFieldSolver < handle
         b_y_half
         
         % 计算模式
-        compute_kernel    % 'cpu' 或 'cuda_mex'
-        
-       
-%{
-  % GPU变量
-        vx_gpu
-        vy_gpu
-        sigmaxx_gpu
-        sigmayy_gpu
-        sigmaxy_gpu
-        c11_gpu
-        c13_gpu
-        c33_gpu
-        c44_gpu
-        rho_gpu
-        memory_dvx_dx_gpu
-        memory_dvy_dy_gpu
-        memory_dvy_dx_gpu
-        memory_dvx_dy_gpu
-        memory_dsigmaxx_dx_gpu
-        memory_dsigmaxy_dy_gpu
-        memory_dsigmaxy_dx_gpu
-        memory_dsigmayy_dy_gpu
-        K_x_gpu
-        K_y_gpu
-        K_x_half_gpu
-        K_y_half_gpu
-        a_x_gpu
-        a_y_gpu
-        a_x_half_gpu
-        a_y_half_gpu
-        b_x_gpu
-        b_y_gpu
-        b_x_half_gpu
-        b_y_half_gpu 
-%}
-
+        compute_kernel    % 'cpu' 或 'cpu_mex' 或 'cuda_mex'
     end
     
     methods
@@ -300,50 +264,6 @@ classdef VTI_WaveFieldSolver < handle
             end
         end
         
-        
-%{
-        function initialize_gpu_arrays(obj)
-                    % 场变量
-                    obj.vx_gpu = gpuArray(obj.vx);
-                    obj.vy_gpu = gpuArray(obj.vy);
-                    obj.sigmaxx_gpu = gpuArray(obj.sigmaxx);
-                    obj.sigmayy_gpu = gpuArray(obj.sigmayy);
-                    obj.sigmaxy_gpu = gpuArray(obj.sigmaxy);
-                    
-                    % 材料参数
-                    obj.c11_gpu = gpuArray(obj.c11);
-                    obj.c13_gpu = gpuArray(obj.c13);
-                    obj.c33_gpu = gpuArray(obj.c33);
-                    obj.c44_gpu = gpuArray(obj.c44);
-                    obj.rho_gpu = gpuArray(obj.rho);
-                    
-                    % PML记忆变量
-                    obj.memory_dvx_dx_gpu = gpuArray(obj.memory_dvx_dx);
-                    obj.memory_dvy_dy_gpu = gpuArray(obj.memory_dvy_dy);
-                    obj.memory_dvy_dx_gpu = gpuArray(obj.memory_dvy_dx);
-                    obj.memory_dvx_dy_gpu = gpuArray(obj.memory_dvx_dy);
-                    obj.memory_dsigmaxx_dx_gpu = gpuArray(obj.memory_dsigmaxx_dx);
-                    obj.memory_dsigmaxy_dy_gpu = gpuArray(obj.memory_dsigmaxy_dy);
-                    obj.memory_dsigmaxy_dx_gpu = gpuArray(obj.memory_dsigmaxy_dx);
-                    obj.memory_dsigmayy_dy_gpu = gpuArray(obj.memory_dsigmayy_dy);
-                    
-                    % PML系数
-                    obj.K_x_gpu = gpuArray(obj.K_x);
-                    obj.K_y_gpu = gpuArray(obj.K_y);
-                    obj.K_x_half_gpu = gpuArray(obj.K_x_half);
-                    obj.K_y_half_gpu = gpuArray(obj.K_y_half);
-                    obj.a_x_gpu = gpuArray(obj.a_x);
-                    obj.a_y_gpu = gpuArray(obj.a_y);
-                    obj.a_x_half_gpu = gpuArray(obj.a_x_half);
-                    obj.a_y_half_gpu = gpuArray(obj.a_y_half);
-                    obj.b_x_gpu = gpuArray(obj.b_x);
-                    obj.b_y_gpu = gpuArray(obj.b_y);
-                    obj.b_x_half_gpu = gpuArray(obj.b_x_half);
-                    obj.b_y_half_gpu = gpuArray(obj.b_y_half);
-                end 
-%}
-
-
         function add_source(obj, it)
             % 添加震源（在指定网格点处添加力矢量）
             a = pi * pi * obj.f0 * obj.f0;
@@ -673,15 +593,17 @@ classdef VTI_WaveFieldSolver < handle
         function compute_wave_propagation(obj)
             switch obj.compute_kernel
                 case 'cpu'
-                    obj.compute_wave_propagation_cpu();  % 原来的CPU实现
+                    obj.compute_wave_propagation_cpu1();  % 遍历 CPU实现
+                case 'cpu_mex'
+                    obj.compute_wave_propagation_cpu2();  % C++ CPU实现
                 case 'cuda_mex'
-                    obj.compute_wave_propagation_gpu();  % 使用GPU版本
+                    obj.compute_wave_propagation_gpu();   % CUDA GPU实现
                 otherwise
-                    error('Unknown compute kernel type');
+                    error('Unknown compute kernel type: %s', obj.compute_kernel);
             end
         end
 
-        function compute_wave_propagation_cpu(obj)
+        function compute_wave_propagation_cpu1(obj)
 
             % 使用类成员变量
             dx = obj.DELTAX;
@@ -778,7 +700,7 @@ classdef VTI_WaveFieldSolver < handle
             end
         end
 
-        function compute_wave_propagation_gpu(obj)
+        function compute_wave_propagation_cpu2(obj)
             % 使用类成员变量
             dx = obj.DELTAX;
             dy = obj.DELTAY;
@@ -847,173 +769,9 @@ classdef VTI_WaveFieldSolver < handle
         end
         
 
-        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%可以删除了，切片不对。%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%  
+        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%可以删除了%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%  
         %{
         function compute_wave_propagation_gpu(obj)
-                    t_start = tic;
-                    fprintf('开始GPU波场计算...\n');
-                    
-                    % 基本参数
-                    dx = obj.DELTAX;
-                    dy = obj.DELTAY;
-                    dt = obj.DELTAT;
-                    
-                    % 计算应力场 sigmaxx 和 sigmayy
-                    t1 = tic;
-                    fprintf('计算应力场...\n');
-                    
-                    % 使用数组操作计算速度梯度
-                    dvx_dx = diff(obj.vx_gpu, 1, 1) / dx;  % 在x方向计算差分 [NX-1, NY]
-                    dvy_dy = diff(obj.vy_gpu, 1, 2) / dy;  % 在y方向计算差分 [NX, NY-1]
-                    
-                    % 现在可以打印维度信息了
-                    fprintf('数组维度信息:\n');
-                    fprintf('dvx_dx: [%d, %d]\n', size(dvx_dx,1), size(dvx_dx,2));
-                    fprintf('dvy_dy: [%d, %d]\n', size(dvy_dy,1), size(dvy_dy,2));
-                    fprintf('c11_gpu: [%d, %d]\n', size(obj.c11_gpu,1), size(obj.c11_gpu,2));
-                    
-                    % 更新PML记忆变量（使用数组广播）
-                    obj.memory_dvx_dx_gpu(1:end-1,:) = obj.b_x_half_gpu(1:end-1) .* obj.memory_dvx_dx_gpu(1:end-1,:) + ...
-                                                obj.a_x_half_gpu(1:end-1) .* dvx_dx;
-                    obj.memory_dvy_dy_gpu(:,1:end-1) = obj.b_y_gpu(1:end-1)' .* obj.memory_dvy_dy_gpu(:,1:end-1) + ...
-                                                obj.a_y_gpu(1:end-1)' .* dvy_dy;
-                    
-                    % 计算最终值（确保维度匹配）
-                    dvx_dx_final = dvx_dx ./ obj.K_x_half_gpu(1:end-1) + obj.memory_dvx_dx_gpu(1:end-1,:);
-                    dvy_dy_final = dvy_dy ./ obj.K_y_gpu(1:end-1)' + obj.memory_dvy_dy_gpu(:,1:end-1);
-                    
-                    % 更新应力场（确保所有数组维度匹配）
-                    % 注意：我们需要确保所有参与计算的数组具有相同的维度
-                    obj.sigmaxx_gpu(1:end-1,1:end-1) = obj.sigmaxx_gpu(1:end-1,1:end-1) + dt * (...
-                        obj.c11_gpu(1:end-1,1:end-1) .* dvx_dx_final(:,1:end-1) + ...
-                        obj.c13_gpu(1:end-1,1:end-1) .* dvy_dy_final(1:end-1,:));
-                    
-                    obj.sigmayy_gpu(1:end-1,1:end-1) = obj.sigmayy_gpu(1:end-1,1:end-1) + dt * (...
-                        obj.c13_gpu(1:end-1,1:end-1) .* dvx_dx_final(:,1:end-1) + ...
-                        obj.c33_gpu(1:end-1,1:end-1) .* dvy_dy_final(1:end-1,:));
-                    
-                    fprintf('应力场计算完成，用时: %.3f秒\n', toc(t1));
-                    
-                    % 计算剪应力 sigmaxy
-                    t2 = tic;
-                    fprintf('计算剪应力...\n');
-                    
-                    % 使用数组操作计算速度梯度
-                    dvy_dx = diff(obj.vy_gpu, 1, 1) / dx;  % [NX-1, NY]
-                    dvx_dy = diff(obj.vx_gpu, 1, 2) / dy;  % [NX, NY-1]
-                    
-                    % 打印所有相关数组的维度
-                    fprintf('数组维度检查:\n');
-                    fprintf('dvy_dx: [%d, %d]\n', size(dvy_dx,1), size(dvy_dx,2));
-                    fprintf('dvx_dy: [%d, %d]\n', size(dvx_dy,1), size(dvx_dy,2));
-                    fprintf('b_x_gpu: [%d, 1]\n', size(obj.b_x_gpu,1));
-                    fprintf('memory_dvy_dx_gpu: [%d, %d]\n', size(obj.memory_dvy_dx_gpu,1), size(obj.memory_dvy_dx_gpu,2));
-                    
-                    % 修正索引范围，确保维度匹配
-                    % 注意：我们需要确保所有切片产生相同大小的数组
-                    memory_slice = obj.memory_dvy_dx_gpu(2:end-1,1:end-1);
-                    b_x_slice = obj.b_x_gpu(2:end-1);
-                    dvy_dx_slice = dvy_dx(1:end-1,1:end-1);  % 修改这里，确保与memory_slice维度匹配
-                    
-                    fprintf('切片后维度检查:\n');
-                    fprintf('memory_slice: [%d, %d]\n', size(memory_slice,1), size(memory_slice,2));
-                    fprintf('b_x_slice: [%d, 1]\n', size(b_x_slice,1));
-                    fprintf('dvy_dx_slice: [%d, %d]\n', size(dvy_dx_slice,1), size(dvy_dx_slice,2));
-                    
-                    % 更新memory_dvy_dx_gpu
-                    obj.memory_dvy_dx_gpu(2:end-1,1:end-1) = b_x_slice .* memory_slice + ...
-                                                        obj.a_x_gpu(2:end-1) .* dvy_dx_slice;
-                    
-                    % 更新memory_dvx_dy_gpu
-                    memory_dvx_slice = obj.memory_dvx_dy_gpu(2:end-1,1:end-1);
-                    b_y_slice = obj.b_y_half_gpu(1:end-1);
-                    dvx_dy_slice = dvx_dy(2:end-1,:);
-
-                    obj.memory_dvx_dy_gpu(2:end-1,1:end-1) = b_y_slice' .* memory_dvx_slice + ...
-                                                        obj.a_y_half_gpu(1:end-1)' .* dvx_dy_slice;
-
-                    % 计算最终值
-                    dvy_dx_final = dvy_dx_slice ./ obj.K_x_gpu(2:end-1) + obj.memory_dvy_dx_gpu(2:end-1,1:end-1);
-                    dvx_dy_final = dvx_dy_slice ./ obj.K_y_half_gpu(1:end-1)' + obj.memory_dvx_dy_gpu(2:end-1,1:end-1);
-
-                    % 更新剪应力
-                    obj.sigmaxy_gpu(2:end-1,1:end-1) = obj.sigmaxy_gpu(2:end-1,1:end-1) + ...
-                        obj.c44_gpu(2:end-1,1:end-1) .* (dvy_dx_final + dvx_dy_final) * dt;
-                    
-                    fprintf('剪应力计算完成，用时: %.3f秒\n', toc(t2));
-                    
-                    % 计算速度场
-                    t3 = tic;
-                    fprintf('计算速度场...\n');
-                    
-                    % x方向速度场
-                    dsigmaxx_dx = diff(obj.sigmaxx_gpu, 1, 1) / dx;  % [NX-1, NY]
-                    dsigmaxy_dy = diff(obj.sigmaxy_gpu, 1, 2) / dy;  % [NX, NY-1]
-                    
-                    % 打印原始维度
-                    fprintf('原始数组维度:\n');
-                    fprintf('dsigmaxx_dx: [%d, %d]\n', size(dsigmaxx_dx,1), size(dsigmaxx_dx,2));
-                    fprintf('dsigmaxy_dy: [%d, %d]\n', size(dsigmaxy_dy,1), size(dsigmaxy_dy,2));
-                    
-                    % 更新记忆变量，使用一致的切片范围
-                    obj.memory_dsigmaxx_dx_gpu(2:end-1,:) = obj.b_x_gpu(2:end-1) .* obj.memory_dsigmaxx_dx_gpu(2:end-1,:) + ...
-                                                        obj.a_x_gpu(2:end-1) .* dsigmaxx_dx(1:end-1,:);
-                    obj.memory_dsigmaxy_dy_gpu(:,2:end-1) = obj.b_y_gpu(2:end-1)' .* obj.memory_dsigmaxy_dy_gpu(:,2:end-1) + ...
-                                                        obj.a_y_gpu(2:end-1)' .* dsigmaxy_dy(:,1:end-1);
-                    
-                    % 计算最终值，确保维度匹配
-                    dsigmaxx_dx_final = dsigmaxx_dx(1:end-1,:) ./ obj.K_x_gpu(2:end-1) + ...
-                                        obj.memory_dsigmaxx_dx_gpu(2:end-1,:);  % [NX-2, NY]
-                    dsigmaxy_dy_final = dsigmaxy_dy(2:end-1,1:end-1) ./ obj.K_y_gpu(2:end-1)' + ...
-                                        obj.memory_dsigmaxy_dy_gpu(2:end-1,2:end-1);  % [NX-2, NY-2]
-                    
-                    % 打印最终维度
-                    fprintf('最终数组维度:\n');
-                    fprintf('dsigmaxx_dx_final: [%d, %d]\n', size(dsigmaxx_dx_final,1), size(dsigmaxx_dx_final,2));
-                    fprintf('dsigmaxy_dy_final: [%d, %d]\n', size(dsigmaxy_dy_final,1), size(dsigmaxy_dy_final,2));
-                    
-                    % 确保两个数组维度完全匹配后再相加
-                    dsigmaxx_dx_final = dsigmaxx_dx_final(:,2:end-1);  % 调整为 [NX-2, NY-2]
-                    
-                    % 更新速度场
-                    obj.vx_gpu(2:end-1,2:end-1) = obj.vx_gpu(2:end-1,2:end-1) + ...
-                        (dsigmaxx_dx_final + dsigmaxy_dy_final) .* dt ./ obj.rho_gpu(2:end-1,2:end-1);
-                    
-                    % y方向速度场
-                    dsigmaxy_dx = diff(obj.sigmaxy_gpu, 1, 1) / dx;
-                    dsigmayy_dy = diff(obj.sigmayy_gpu, 1, 2) / dy;
-                    
-                    obj.memory_dsigmaxy_dx_gpu(1:end-1,:) = obj.b_x_half_gpu(1:end-1) .* obj.memory_dsigmaxy_dx_gpu(1:end-1,:) + ...
-                                                obj.a_x_half_gpu(1:end-1) .* dsigmaxy_dx;
-                    obj.memory_dsigmayy_dy_gpu(:,1:end-1) = obj.b_y_half_gpu(1:end-1)' .* obj.memory_dsigmayy_dy_gpu(:,1:end-1) + ...
-                                                obj.a_y_half_gpu(1:end-1)' .* dsigmayy_dy;
-                    
-                    dsigmaxy_dx_final = dsigmaxy_dx ./ obj.K_x_half_gpu(1:end-1) + obj.memory_dsigmaxy_dx_gpu(1:end-1,:);
-                    dsigmayy_dy_final = dsigmayy_dy ./ obj.K_y_half_gpu(1:end-1)' + obj.memory_dsigmayy_dy_gpu(:,1:end-1);
-                    
-                    obj.vy_gpu(1:end-1,1:end-1) = obj.vy_gpu(1:end-1,1:end-1) + ...
-                        (dsigmaxy_dx_final + dsigmayy_dy_final) .* dt ./ obj.rho_gpu(1:end-1,1:end-1);
-                    
-                    fprintf('速度场计算完成，用时: %.3f秒\n', toc(t3));
-                    
-                    % GPU内存使用情况检查
-                    gpu_info = gpuDevice();
-                    fprintf('\nGPU内存使用情况:\n');
-                    fprintf('总内存: %.2f GB\n', gpu_info.TotalMemory/1e9);
-                    fprintf('可用内存: %.2f GB\n', gpu_info.AvailableMemory/1e9);
-                    fprintf('已用内存: %.2f GB\n', (gpu_info.TotalMemory - gpu_info.AvailableMemory)/1e9);
-                    
-                    compute_time = toc(t_start);
-                    fprintf('\n总计算用时: %.3f秒\n', compute_time);
-                    
-                    % 检查数值稳定性
-                    if any(isnan(gather(obj.vx_gpu(:)))) || any(isinf(gather(obj.vx_gpu(:))))
-                        warning('x方向速度场中出现NaN或Inf值！');
-                    end
-                    if any(isnan(gather(obj.vy_gpu(:)))) || any(isinf(gather(obj.vy_gpu(:))))
-                        warning('y方向速度场中出现NaN或Inf值！');
-                    end
-                end 
         %}
 
 
