@@ -97,7 +97,8 @@ params.ysource = (params.ISOURCE - 1) * params.DELTAY;
 params.IT_DISPLAY = 100;    
 
 % 计算模式：'cpu' or 'cpu_mex' or 'cuda_mex'
-params.compute_kernel = 'cpu_mex';  
+% params.compute_kernel = 'cpu_mex';  
+params.compute_kernel = 'cuda_mex';  
 %params.compute_kernel = 'cpu'; 
 
 fprintf('\n=== 创建VTI_WaveFieldSolver实例并初始化 ===\n');

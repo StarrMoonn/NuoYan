@@ -97,9 +97,9 @@ try
     
     % 计算单炮的伴随波场
     fprintf('\n=== 开始计算第 %d 炮的伴随波场 ===\n', ishot);
-    fprintf('开始时间: %s\n', datestr(now));
+    fprintf('开始时间: %s\n', datetime('now'));
     adjoint_wavefield = adjoint_solver.compute_adjoint_wavefield_single_shot(ishot);
-    fprintf('结束时间: %s\n', datestr(now));
+    fprintf('结束时间: %s\n', datetime('now'));
     
     % 验证结果
     fprintf('\n=== 验证计算结果 ===\n');
