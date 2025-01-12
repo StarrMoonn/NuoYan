@@ -597,6 +597,7 @@ classdef VTI_WaveFieldSolver < handle
                 case 'cpu_mex'
                     obj.compute_wave_propagation_cpu2();  % C++ CPU实现
                 case 'cuda_mex'
+                    warning('cuda代码计算结果错误，请停止使用');  % 添加警告信息
                     obj.compute_wave_propagation_gpu();   % CUDA GPU实现
                 otherwise
                     error('Unknown compute kernel type: %s', obj.compute_kernel);
@@ -861,19 +862,6 @@ classdef VTI_WaveFieldSolver < handle
             end
         end
         
-        
-        %{
-        function record_seismograms_gpu(obj, it)
-                    % GPU版本的地震图记录函数
-                    % 直接使用GPU上的数据，不需要传回CPU
-                    for i = 1:obj.NREC
-                        obj.seismogram_vx(it, i) = obj.vx_gpu(obj.rec_x(i), obj.rec_y(i));
-                        obj.seismogram_vy(it, i) = obj.vy_gpu(obj.rec_y(i), obj.rec_y(i));
-                    end
-                end 
-        %}
-
-        
         function output_info(obj, it)
             % 输出模拟状态信息和保存波场数据
             vx_data = obj.vx;
@@ -906,43 +894,6 @@ classdef VTI_WaveFieldSolver < handle
                 save(save_path, 'vx_data', 'vy_data', '-v7.3');
             end
         end
-        
-        
-        %{
-        function output_info_gpu(obj, it)
-                    % GPU版本的输出信息函数
-                    % 计算速度场的最大幅值（在GPU上进行）
-                    velocnorm = max(max(sqrt(obj.vx_gpu.^2 + obj.vy_gpu.^2)));
-                    velocnorm = gather(velocnorm);  % 只传输一个标量值
-                    
-                    % 输出信息
-                    fprintf('炮号: %d/%d, 时间步: %d/%d\n', ...
-                        obj.current_shot_number, obj.NSHOT, it, obj.NSTEP);
-                    fprintf('模拟时间: %.6f 秒\n', (it-1)*obj.DELTAT);
-                    fprintf('速度矢量最大范数 (m/s) = %f\n\n', velocnorm);
-                    
-                    % 检查数值稳定性
-                    if velocnorm > obj.STABILITY_THRESHOLD
-                        error('模拟变得不稳定并发散');
-                    end
-                    
-                    % 保存波场快照（如果需要）
-                    if obj.save_snapshots
-                        % 创建目录
-                        shot_dir = fullfile(obj.output_dir, sprintf('shot_%03d', obj.current_shot_number));
-                        if ~exist(shot_dir, 'dir')
-                            mkdir(shot_dir);
-                        end
-                        
-                        % 保存GPU数据
-                        vx_data = obj.vx_gpu;  % 保持在GPU上
-                        vy_data = obj.vy_gpu;
-                        save_path = fullfile(shot_dir, sprintf('wavefield_%06d.mat', it));
-                        save(save_path, 'vx_data', 'vy_data', '-v7.3');
-                    end
-                end 
-        %}
-
         
         function reset_fields(obj)
             % 重置波场和记忆变量
