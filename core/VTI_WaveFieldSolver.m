@@ -768,9 +768,71 @@ classdef VTI_WaveFieldSolver < handle
             obj.vy = vy;
         end
         
-        %{
         function compute_wave_propagation_gpu(obj)
-        %}
+            % Similar to compute_wave_propagation_cpu2 but using GPU version
+            dx = obj.DELTAX;
+            dy = obj.DELTAY;
+            dt = obj.DELTAT;
+            
+            % Prepare data for MEX function
+            vx = obj.vx;           % x-direction velocity field
+            vy = obj.vy;           % y-direction velocity field
+            sigmaxx = obj.sigmaxx; % x-direction stress
+            sigmayy = obj.sigmayy; % y-direction stress
+            sigmaxy = obj.sigmaxy; % shear stress
+
+            % Memory variables
+            memory_dvx_dx = obj.memory_dvx_dx; 
+            memory_dvy_dy = obj.memory_dvy_dy;
+            memory_dvy_dx = obj.memory_dvy_dx;
+            memory_dvx_dy = obj.memory_dvx_dy;
+            memory_dsigmaxx_dx = obj.memory_dsigmaxx_dx;
+            memory_dsigmaxy_dy = obj.memory_dsigmaxy_dy;
+            memory_dsigmaxy_dx = obj.memory_dsigmaxy_dx;
+            memory_dsigmayy_dy = obj.memory_dsigmayy_dy;
+
+            % Material parameters
+            c11 = obj.c11;
+            c13 = obj.c13;
+            c33 = obj.c33;
+            c44 = obj.c44;
+            rho = obj.rho;
+
+            % PML parameters
+            b_x = obj.b_x;
+            b_y = obj.b_y;
+            b_x_half = obj.b_x_half;
+            b_y_half = obj.b_y_half;
+            a_x = obj.a_x;
+            a_y = obj.a_y;
+            a_x_half = obj.a_x_half;
+            a_y_half = obj.a_y_half;
+            K_x = obj.K_x;
+            K_y = obj.K_y;
+            K_x_half = obj.K_x_half;
+            K_y_half = obj.K_y_half;
+
+            % Computation parameters
+            DELTAX = obj.DELTAX;
+            DELTAY = obj.DELTAY;
+            DELTAT = obj.DELTAT;
+            NX = obj.NX;
+            NY = obj.NY;
+
+            % Call the GPU MEX file
+            [vx, vy] = compute_wave_propagation_gpu(vx, vy, sigmaxx, sigmayy, sigmaxy, ...
+                memory_dvx_dx, memory_dvy_dy, memory_dvy_dx, memory_dvx_dy, ...
+                memory_dsigmaxx_dx, memory_dsigmaxy_dy, memory_dsigmaxy_dx, memory_dsigmayy_dy, ...
+                c11, c13, c33, c44, rho, ...
+                b_x, b_y, b_x_half, b_y_half, ...
+                a_x, a_y, a_x_half, a_y_half, ...
+                K_x, K_y, K_x_half, K_y_half, ...
+                DELTAX, DELTAY, DELTAT, NX, NY);
+
+            % Update class member variables with MEX output
+            obj.vx = vx;
+            obj.vy = vy;
+        end
 
         function apply_boundary_conditions(obj)
             % 应用Dirichlet边界条件（刚性边界）
