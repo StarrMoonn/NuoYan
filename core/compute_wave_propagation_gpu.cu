@@ -4,7 +4,7 @@
 #include <cmath>
 #include <cstring>
 
-// CUDA错误检查宏
+// CUDA error checking macro
 #define CHECK_CUDA_ERROR(call) \
     do { \
         cudaError_t err = call; \
@@ -15,7 +15,7 @@
         } \
     } while (0)
 
-// CUDA核函数：计算应力场
+// CUDA kernel: Compute stress field
 __global__ void compute_stress_kernel(
     double *vx, double *vy, double *sigmaxx, double *sigmayy, double *sigmaxy,
     double *memory_dvx_dx, double *memory_dvy_dy,
@@ -52,7 +52,7 @@ __global__ void compute_stress_kernel(
     }
 }
 
-// CUDA核函数：计算剪应力
+// CUDA kernel: Compute shear stress
 __global__ void compute_shear_stress_kernel(
     double *vx, double *vy, double *sigmaxy,
     double *memory_dvy_dx, double *memory_dvx_dy,
@@ -81,7 +81,7 @@ __global__ void compute_shear_stress_kernel(
     }
 }
 
-// CUDA核函数：计算x方向速度场
+// CUDA kernel: Compute x-direction velocity field
 __global__ void compute_velocity_x_kernel(
     double *vx, double *sigmaxx, double *sigmaxy,
     double *memory_dsigmaxx_dx, double *memory_dsigmaxy_dy,
@@ -110,7 +110,7 @@ __global__ void compute_velocity_x_kernel(
     }
 }
 
-// CUDA核函数：计算y方向速度场
+// CUDA kernel: Compute y-direction velocity field
 __global__ void compute_velocity_y_kernel(
     double *vy, double *sigmaxy, double *sigmayy,
     double *memory_dsigmaxy_dx, double *memory_dsigmayy_dy,
@@ -139,34 +139,34 @@ __global__ void compute_velocity_y_kernel(
     }
 }
 
-// MEX入口函数
+// MEX entry function
 void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
 {
-    // 检查输入输出参数数量
+    // Check number of input/output parameters
     if (nrhs != 33) {
-        mexErrMsgTxt("需要33个输入参数");
+        mexErrMsgTxt("Need 33 input parameters");
     }
     if (nlhs != 2) {
-        mexErrMsgTxt("需要2个输出参数");
+        mexErrMsgTxt("Need 2 output parameters");
     }
 
-    // 获取网格尺寸
+    // Get grid dimensions
     int NX = (int)mxGetScalar(prhs[31]);
     int NY = (int)mxGetScalar(prhs[32]);
 
-    // 获取时间和空间步长
+    // Get time and space steps
     double DELTAX = mxGetScalar(prhs[28]);
     double DELTAY = mxGetScalar(prhs[29]);
     double DELTAT = mxGetScalar(prhs[30]);
 
-    // 获取输入数组指针
+    // Get input array pointers
     double *vx = mxGetPr(prhs[0]);
     double *vy = mxGetPr(prhs[1]);
     double *sigmaxx = mxGetPr(prhs[2]);
     double *sigmayy = mxGetPr(prhs[3]);
     double *sigmaxy = mxGetPr(prhs[4]);
     
-    // 获取内存变量指针
+    // Get memory variable pointers
     double *memory_dvx_dx = mxGetPr(prhs[5]);
     double *memory_dvy_dy = mxGetPr(prhs[6]);
     double *memory_dvy_dx = mxGetPr(prhs[7]);
@@ -176,14 +176,14 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
     double *memory_dsigmaxy_dx = mxGetPr(prhs[11]);
     double *memory_dsigmayy_dy = mxGetPr(prhs[12]);
 
-    // 获取材料参数指针
+    // Get material parameter pointers
     double *c11 = mxGetPr(prhs[13]);
     double *c13 = mxGetPr(prhs[14]);
     double *c33 = mxGetPr(prhs[15]);
     double *c44 = mxGetPr(prhs[16]);
     double *rho = mxGetPr(prhs[17]);
 
-    // 获取PML参数指针
+    // Get PML parameter pointers
     double *b_x = mxGetPr(prhs[18]);
     double *b_y = mxGetPr(prhs[19]);
     double *b_x_half = mxGetPr(prhs[20]);
@@ -197,7 +197,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
     double *K_x_half = mxGetPr(prhs[28]);
     double *K_y_half = mxGetPr(prhs[29]);
 
-    // 分配GPU内存 - 2D数组
+    // Allocate GPU memory - 2D arrays
     size_t size_2d = NX * NY * sizeof(double);
     double *d_vx, *d_vy, *d_sigmaxx, *d_sigmayy, *d_sigmaxy;
     CHECK_CUDA_ERROR(cudaMalloc(&d_vx, size_2d));
@@ -206,7 +206,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
     CHECK_CUDA_ERROR(cudaMalloc(&d_sigmayy, size_2d));
     CHECK_CUDA_ERROR(cudaMalloc(&d_sigmaxy, size_2d));
 
-    // 分配内存变量
+    // Allocate memory for field variables
     double *d_memory_dvx_dx, *d_memory_dvy_dy, *d_memory_dvy_dx, *d_memory_dvx_dy;
     double *d_memory_dsigmaxx_dx, *d_memory_dsigmaxy_dy, *d_memory_dsigmaxy_dx, *d_memory_dsigmayy_dy;
     CHECK_CUDA_ERROR(cudaMalloc(&d_memory_dvx_dx, size_2d));
@@ -218,14 +218,14 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
     CHECK_CUDA_ERROR(cudaMalloc(&d_memory_dsigmaxy_dx, size_2d));
     CHECK_CUDA_ERROR(cudaMalloc(&d_memory_dsigmayy_dy, size_2d));
 
-    // 复制数据到GPU - 2D数组
+    // Copy data to GPU - 2D arrays
     CHECK_CUDA_ERROR(cudaMemcpy(d_vx, vx, size_2d, cudaMemcpyHostToDevice));
     CHECK_CUDA_ERROR(cudaMemcpy(d_vy, vy, size_2d, cudaMemcpyHostToDevice));
     CHECK_CUDA_ERROR(cudaMemcpy(d_sigmaxx, sigmaxx, size_2d, cudaMemcpyHostToDevice));
     CHECK_CUDA_ERROR(cudaMemcpy(d_sigmayy, sigmayy, size_2d, cudaMemcpyHostToDevice));
     CHECK_CUDA_ERROR(cudaMemcpy(d_sigmaxy, sigmaxy, size_2d, cudaMemcpyHostToDevice));
 
-    // 复制内存变量
+    // Copy memory variables
     CHECK_CUDA_ERROR(cudaMemcpy(d_memory_dvx_dx, memory_dvx_dx, size_2d, cudaMemcpyHostToDevice));
     CHECK_CUDA_ERROR(cudaMemcpy(d_memory_dvy_dy, memory_dvy_dy, size_2d, cudaMemcpyHostToDevice));
     CHECK_CUDA_ERROR(cudaMemcpy(d_memory_dvy_dx, memory_dvy_dx, size_2d, cudaMemcpyHostToDevice));
@@ -235,14 +235,22 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
     CHECK_CUDA_ERROR(cudaMemcpy(d_memory_dsigmaxy_dx, memory_dsigmaxy_dx, size_2d, cudaMemcpyHostToDevice));
     CHECK_CUDA_ERROR(cudaMemcpy(d_memory_dsigmayy_dy, memory_dsigmayy_dy, size_2d, cudaMemcpyHostToDevice));
 
-    // 复制材料参数
+    // Allocate memory for material parameters
+    double *d_c11, *d_c13, *d_c33, *d_c44, *d_rho;
+    CHECK_CUDA_ERROR(cudaMalloc(&d_c11, size_2d));
+    CHECK_CUDA_ERROR(cudaMalloc(&d_c13, size_2d));
+    CHECK_CUDA_ERROR(cudaMalloc(&d_c33, size_2d));
+    CHECK_CUDA_ERROR(cudaMalloc(&d_c44, size_2d));
+    CHECK_CUDA_ERROR(cudaMalloc(&d_rho, size_2d));
+
+    // Copy data to GPU - Material parameters
     CHECK_CUDA_ERROR(cudaMemcpy(d_c11, c11, size_2d, cudaMemcpyHostToDevice));
     CHECK_CUDA_ERROR(cudaMemcpy(d_c13, c13, size_2d, cudaMemcpyHostToDevice));
     CHECK_CUDA_ERROR(cudaMemcpy(d_c33, c33, size_2d, cudaMemcpyHostToDevice));
     CHECK_CUDA_ERROR(cudaMemcpy(d_c44, c44, size_2d, cudaMemcpyHostToDevice));
     CHECK_CUDA_ERROR(cudaMemcpy(d_rho, rho, size_2d, cudaMemcpyHostToDevice));
 
-    // 复制PML参数 - 1D数组
+    // Allocate PML parameter pointers - 1D arrays
     size_t size_1d_x = NX * sizeof(double);
     size_t size_1d_y = NY * sizeof(double);
     double *d_b_x, *d_b_y, *d_b_x_half, *d_b_y_half;
@@ -262,7 +270,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
     CHECK_CUDA_ERROR(cudaMalloc(&d_K_x_half, size_1d_x));
     CHECK_CUDA_ERROR(cudaMalloc(&d_K_y_half, size_1d_y));
 
-    // 复制PML参数 - 1D数组
+    // Copy PML parameters - 1D arrays
     CHECK_CUDA_ERROR(cudaMemcpy(d_b_x, b_x, size_1d_x, cudaMemcpyHostToDevice));
     CHECK_CUDA_ERROR(cudaMemcpy(d_b_y, b_y, size_1d_y, cudaMemcpyHostToDevice));
     CHECK_CUDA_ERROR(cudaMemcpy(d_b_x_half, b_x_half, size_1d_x, cudaMemcpyHostToDevice));
@@ -276,12 +284,12 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
     CHECK_CUDA_ERROR(cudaMemcpy(d_K_x_half, K_x_half, size_1d_x, cudaMemcpyHostToDevice));
     CHECK_CUDA_ERROR(cudaMemcpy(d_K_y_half, K_y_half, size_1d_y, cudaMemcpyHostToDevice));
 
-    // 设置线程块和网格大小
+    // Set thread block and grid dimensions
     dim3 blockSize(16, 16);
     dim3 gridSize((NX + blockSize.x - 1) / blockSize.x, 
                   (NY + blockSize.y - 1) / blockSize.y);
     
-    // 直接调用四个核函数
+    // Launch kernels
     compute_stress_kernel<<<gridSize, blockSize>>>(d_vx, d_vy, d_sigmaxx, d_sigmayy, d_sigmaxy,
                                                 d_memory_dvx_dx, d_memory_dvy_dy,
                                                 d_c11, d_c13, d_c33,
@@ -310,15 +318,15 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
                                                       d_K_x_half, d_K_y_half,
                                                       DELTAX, DELTAY, DELTAT, NX, NY);
 
-    // 检查核函数执行错误
+    // Check for kernel execution errors
     CHECK_CUDA_ERROR(cudaGetLastError());
     CHECK_CUDA_ERROR(cudaDeviceSynchronize());
 
-    // 复制结果回主机
+    // Copy results back to host
     CHECK_CUDA_ERROR(cudaMemcpy(vx, d_vx, size_2d, cudaMemcpyDeviceToHost));
     CHECK_CUDA_ERROR(cudaMemcpy(vy, d_vy, size_2d, cudaMemcpyDeviceToHost));
 
-    // 释放所有GPU内存
+    // Free GPU memory
     cudaFree(d_vx); cudaFree(d_vy);
     cudaFree(d_sigmaxx); cudaFree(d_sigmayy); cudaFree(d_sigmaxy);
     cudaFree(d_memory_dvx_dx); cudaFree(d_memory_dvy_dy);
@@ -334,7 +342,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
     cudaFree(d_K_x); cudaFree(d_K_y);
     cudaFree(d_K_x_half); cudaFree(d_K_y_half);
 
-    // 创建输出矩阵并复制结果
+    // Create output matrices and copy results
     plhs[0] = mxCreateDoubleMatrix(NX, NY, mxREAL);
     plhs[1] = mxCreateDoubleMatrix(NX, NY, mxREAL);
     memcpy(mxGetPr(plhs[0]), vx, NX * NY * sizeof(double));
