@@ -29,25 +29,29 @@ __global__ void compute_stress_kernel(
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     
     if (i < NX-1 && j < NY) {
-        double value_dvx_dx = (vx[(i + 1) + j * NX] - vx[i + j * NX]) / DELTAX;
-        double value_dvy_dy = (vy[i + j * NX] - vy[i + (j - 1) * NX]) / DELTAY;
+        int idx = i + j*NX;
+        int idx_ip1 = (i+1) + j*NX;
+        int idx_jm1 = i + (j-1)*NX;
+        
+        double value_dvx_dx = (vx[idx_ip1] - vx[idx]) / DELTAX;
+        double value_dvy_dy = (vy[idx] - vy[idx_jm1]) / DELTAY;
 
-        memory_dvx_dx[i + j * NX] = b_x_half[i] * memory_dvx_dx[i + j * NX] + 
-                                   a_x_half[i] * value_dvx_dx;
-        memory_dvy_dy[i + j * NX] = b_y[j] * memory_dvy_dy[i + j * NX] + 
-                                   a_y[j] * value_dvy_dy;
+        memory_dvx_dx[idx] = b_x_half[i] * memory_dvx_dx[idx] + 
+                            a_x_half[i] * value_dvx_dx;
+        memory_dvy_dy[idx] = b_y[j] * memory_dvy_dy[idx] + 
+                            a_y[j] * value_dvy_dy;
 
-        value_dvx_dx = value_dvx_dx / K_x_half[i] + memory_dvx_dx[i + j * NX];
-        value_dvy_dy = value_dvy_dy / K_y[j] + memory_dvy_dy[i + j * NX];
+        value_dvx_dx = value_dvx_dx / K_x_half[i] + memory_dvx_dx[idx];
+        value_dvy_dy = value_dvy_dy / K_y[j] + memory_dvy_dy[idx];
 
-        sigmaxx[i + j * NX] += DELTAT * (
-            c11[i + j * NX] * value_dvx_dx + 
-            c13[i + j * NX] * value_dvy_dy
+        sigmaxx[idx] += DELTAT * (
+            c11[idx] * value_dvx_dx + 
+            c13[idx] * value_dvy_dy
         );
         
-        sigmayy[i + j * NX] += DELTAT * (
-            c13[i + j * NX] * value_dvx_dx + 
-            c33[i + j * NX] * value_dvy_dy
+        sigmayy[idx] += DELTAT * (
+            c13[idx] * value_dvx_dx + 
+            c33[idx] * value_dvy_dy
         );
     }
 }
@@ -66,18 +70,22 @@ __global__ void compute_shear_stress_kernel(
     int i = blockIdx.x * blockDim.x + threadIdx.x + 1;
     
     if (i < NX && j < NY-1) {
-        double value_dvy_dx = (vy[i + j * NX] - vy[(i - 1) + j * NX]) / DELTAX;
-        double value_dvx_dy = (vx[i + (j + 1) * NX] - vx[i + j * NX]) / DELTAY;
+        int idx = i + j*NX;
+        int idx_im1 = (i-1) + j*NX;
+        int idx_jp1 = i + (j+1)*NX;
 
-        memory_dvy_dx[i + j * NX] = b_x[i] * memory_dvy_dx[i + j * NX] + 
-                                   a_x[i] * value_dvy_dx;
-        memory_dvx_dy[i + j * NX] = b_y_half[j] * memory_dvx_dy[i + j * NX] + 
-                                   a_y_half[j] * value_dvx_dy;
+        double value_dvy_dx = (vy[idx] - vy[idx_im1]) / DELTAX;
+        double value_dvx_dy = (vx[idx_jp1] - vx[idx]) / DELTAY;
 
-        value_dvy_dx = value_dvy_dx / K_x[i] + memory_dvy_dx[i + j * NX];
-        value_dvx_dy = value_dvx_dy / K_y_half[j] + memory_dvx_dy[i + j * NX];
+        memory_dvy_dx[idx] = b_x[i] * memory_dvy_dx[idx] + 
+                            a_x[i] * value_dvy_dx;
+        memory_dvx_dy[idx] = b_y_half[j] * memory_dvx_dy[idx] + 
+                            a_y_half[j] * value_dvx_dy;
 
-        sigmaxy[i + j * NX] += c44[i + j * NX] * (value_dvy_dx + value_dvx_dy) * DELTAT;
+        value_dvy_dx = value_dvy_dx / K_x[i] + memory_dvy_dx[idx];
+        value_dvx_dy = value_dvx_dy / K_y_half[j] + memory_dvx_dy[idx];
+
+        sigmaxy[idx] += c44[idx] * (value_dvy_dx + value_dvx_dy) * DELTAT;
     }
 }
 
@@ -95,18 +103,22 @@ __global__ void compute_velocity_x_kernel(
     int i = blockIdx.x * blockDim.x + threadIdx.x + 1;
     
     if (i < NX && j < NY) {
-        double value_dsigmaxx_dx = (sigmaxx[i + j * NX] - sigmaxx[(i - 1) + j * NX]) / DELTAX;
-        double value_dsigmaxy_dy = (sigmaxy[i + j * NX] - sigmaxy[i + (j - 1) * NX]) / DELTAY;
+        int idx = i + j*NX;
+        int idx_im1 = (i-1) + j*NX;
+        int idx_jm1 = i + (j-1)*NX;
 
-        memory_dsigmaxx_dx[i + j * NX] = b_x[i] * memory_dsigmaxx_dx[i + j * NX] + 
-                                        a_x[i] * value_dsigmaxx_dx;
-        memory_dsigmaxy_dy[i + j * NX] = b_y[j] * memory_dsigmaxy_dy[i + j * NX] + 
-                                        a_y[j] * value_dsigmaxy_dy;
+        double value_dsigmaxx_dx = (sigmaxx[idx] - sigmaxx[idx_im1]) / DELTAX;
+        double value_dsigmaxy_dy = (sigmaxy[idx] - sigmaxy[idx_jm1]) / DELTAY;
 
-        value_dsigmaxx_dx = value_dsigmaxx_dx / K_x[i] + memory_dsigmaxx_dx[i + j * NX];
-        value_dsigmaxy_dy = value_dsigmaxy_dy / K_y[j] + memory_dsigmaxy_dy[i + j * NX];
+        memory_dsigmaxx_dx[idx] = b_x[i] * memory_dsigmaxx_dx[idx] + 
+                                 a_x[i] * value_dsigmaxx_dx;
+        memory_dsigmaxy_dy[idx] = b_y[j] * memory_dsigmaxy_dy[idx] + 
+                                 a_y[j] * value_dsigmaxy_dy;
 
-        vx[i + j * NX] += (value_dsigmaxx_dx + value_dsigmaxy_dy) * DELTAT / rho[i + j * NX];
+        value_dsigmaxx_dx = value_dsigmaxx_dx / K_x[i] + memory_dsigmaxx_dx[idx];
+        value_dsigmaxy_dy = value_dsigmaxy_dy / K_y[j] + memory_dsigmaxy_dy[idx];
+
+        vx[idx] += (value_dsigmaxx_dx + value_dsigmaxy_dy) * DELTAT / rho[idx];
     }
 }
 
@@ -124,18 +136,22 @@ __global__ void compute_velocity_y_kernel(
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     
     if (i < NX-1 && j < NY-1) {
-        double value_dsigmaxy_dx = (sigmaxy[(i + 1) + j * NX] - sigmaxy[i + j * NX]) / DELTAX;
-        double value_dsigmayy_dy = (sigmayy[i + (j + 1) * NX] - sigmayy[i + j * NX]) / DELTAY;
+        int idx = i + j*NX;
+        int idx_ip1 = (i+1) + j*NX;
+        int idx_jp1 = i + (j+1)*NX;
 
-        memory_dsigmaxy_dx[i + j * NX] = b_x_half[i] * memory_dsigmaxy_dx[i + j * NX] + 
-                                        a_x_half[i] * value_dsigmaxy_dx;
-        memory_dsigmayy_dy[i + j * NX] = b_y_half[j] * memory_dsigmayy_dy[i + j * NX] + 
-                                        a_y_half[j] * value_dsigmayy_dy;
+        double value_dsigmaxy_dx = (sigmaxy[idx_ip1] - sigmaxy[idx]) / DELTAX;
+        double value_dsigmayy_dy = (sigmayy[idx_jp1] - sigmayy[idx]) / DELTAY;
 
-        value_dsigmaxy_dx = value_dsigmaxy_dx / K_x_half[i] + memory_dsigmaxy_dx[i + j * NX];
-        value_dsigmayy_dy = value_dsigmayy_dy / K_y_half[j] + memory_dsigmayy_dy[i + j * NX];
+        memory_dsigmaxy_dx[idx] = b_x_half[i] * memory_dsigmaxy_dx[idx] + 
+                                 a_x_half[i] * value_dsigmaxy_dx;
+        memory_dsigmayy_dy[idx] = b_y_half[j] * memory_dsigmayy_dy[idx] + 
+                                 a_y_half[j] * value_dsigmayy_dy;
 
-        vy[i + j * NX] += (value_dsigmaxy_dx + value_dsigmayy_dy) * DELTAT / rho[i + j * NX];
+        value_dsigmaxy_dx = value_dsigmaxy_dx / K_x_half[i] + memory_dsigmaxy_dx[idx];
+        value_dsigmayy_dy = value_dsigmayy_dy / K_y_half[j] + memory_dsigmayy_dy[idx];
+
+        vy[idx] += (value_dsigmaxy_dx + value_dsigmayy_dy) * DELTAT / rho[idx];
     }
 }
 
@@ -143,21 +159,12 @@ __global__ void compute_velocity_y_kernel(
 void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
 {
     // Check number of input/output parameters
-    if (nrhs != 33) {
-        mexErrMsgTxt("Need 33 input parameters");
+    if (nrhs != 35) {
+        mexErrMsgTxt("Need 35 input parameters");
     }
     if (nlhs != 2) {
         mexErrMsgTxt("Need 2 output parameters");
     }
-
-    // Get grid dimensions
-    int NX = (int)mxGetScalar(prhs[31]);
-    int NY = (int)mxGetScalar(prhs[32]);
-
-    // Get time and space steps
-    double DELTAX = mxGetScalar(prhs[28]);
-    double DELTAY = mxGetScalar(prhs[29]);
-    double DELTAT = mxGetScalar(prhs[30]);
 
     // Get input array pointers
     double *vx = mxGetPr(prhs[0]);
@@ -195,20 +202,34 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
     double *K_x = mxGetPr(prhs[26]);
     double *K_y = mxGetPr(prhs[27]);
     double *K_x_half = mxGetPr(prhs[28]);
-    double *K_y_half = mxGetPr(prhs[29]);
+    double *K_y_half = mxGetPr(prhs[29]);   
+
+    // Get computation parameters
+    double DELTAX = mxGetScalar(prhs[30]);
+    double DELTAY = mxGetScalar(prhs[31]);
+    double DELTAT = mxGetScalar(prhs[32]);
+    int NX = static_cast<int>(mxGetScalar(prhs[33]));
+    int NY = static_cast<int>(mxGetScalar(prhs[34]));
 
     // Allocate GPU memory - 2D arrays
     size_t size_2d = NX * NY * sizeof(double);
     double *d_vx, *d_vy, *d_sigmaxx, *d_sigmayy, *d_sigmaxy;
+    double *d_memory_dvx_dx, *d_memory_dvy_dy, *d_memory_dvy_dx, *d_memory_dvx_dy;
+    double *d_memory_dsigmaxx_dx, *d_memory_dsigmaxy_dy;
+    double *d_memory_dsigmaxy_dx, *d_memory_dsigmayy_dy;
+    double *d_c11, *d_c13, *d_c33, *d_c44, *d_rho;
+    double *d_b_x, *d_b_y, *d_b_x_half, *d_b_y_half;
+    double *d_a_x, *d_a_y, *d_a_x_half, *d_a_y_half;
+    double *d_K_x, *d_K_y, *d_K_x_half, *d_K_y_half;
+
+    // Allocate field variables
     CHECK_CUDA_ERROR(cudaMalloc(&d_vx, size_2d));
     CHECK_CUDA_ERROR(cudaMalloc(&d_vy, size_2d));
     CHECK_CUDA_ERROR(cudaMalloc(&d_sigmaxx, size_2d));
     CHECK_CUDA_ERROR(cudaMalloc(&d_sigmayy, size_2d));
     CHECK_CUDA_ERROR(cudaMalloc(&d_sigmaxy, size_2d));
 
-    // Allocate memory for field variables
-    double *d_memory_dvx_dx, *d_memory_dvy_dy, *d_memory_dvy_dx, *d_memory_dvx_dy;
-    double *d_memory_dsigmaxx_dx, *d_memory_dsigmaxy_dy, *d_memory_dsigmaxy_dx, *d_memory_dsigmayy_dy;
+    // Allocate memory variables
     CHECK_CUDA_ERROR(cudaMalloc(&d_memory_dvx_dx, size_2d));
     CHECK_CUDA_ERROR(cudaMalloc(&d_memory_dvy_dy, size_2d));
     CHECK_CUDA_ERROR(cudaMalloc(&d_memory_dvy_dx, size_2d));
@@ -217,6 +238,33 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
     CHECK_CUDA_ERROR(cudaMalloc(&d_memory_dsigmaxy_dy, size_2d));
     CHECK_CUDA_ERROR(cudaMalloc(&d_memory_dsigmaxy_dx, size_2d));
     CHECK_CUDA_ERROR(cudaMalloc(&d_memory_dsigmayy_dy, size_2d));
+
+    // Allocate material parameters
+    CHECK_CUDA_ERROR(cudaMalloc(&d_c11, size_2d));
+    CHECK_CUDA_ERROR(cudaMalloc(&d_c13, size_2d));
+    CHECK_CUDA_ERROR(cudaMalloc(&d_c33, size_2d));
+    CHECK_CUDA_ERROR(cudaMalloc(&d_c44, size_2d));
+    CHECK_CUDA_ERROR(cudaMalloc(&d_rho, size_2d));
+
+    // Allocate PML parameters
+    size_t size_x = NX * sizeof(double);
+    size_t size_y = NY * sizeof(double);
+
+    //  (NX,1)
+    CHECK_CUDA_ERROR(cudaMalloc(&d_b_x, size_x));
+    CHECK_CUDA_ERROR(cudaMalloc(&d_b_x_half, size_x));
+    CHECK_CUDA_ERROR(cudaMalloc(&d_a_x, size_x));
+    CHECK_CUDA_ERROR(cudaMalloc(&d_a_x_half, size_x));
+    CHECK_CUDA_ERROR(cudaMalloc(&d_K_x, size_x));
+    CHECK_CUDA_ERROR(cudaMalloc(&d_K_x_half, size_x));
+
+    //  (NY,1)
+    CHECK_CUDA_ERROR(cudaMalloc(&d_b_y, size_y));
+    CHECK_CUDA_ERROR(cudaMalloc(&d_b_y_half, size_y));
+    CHECK_CUDA_ERROR(cudaMalloc(&d_a_y, size_y));
+    CHECK_CUDA_ERROR(cudaMalloc(&d_a_y_half, size_y));
+    CHECK_CUDA_ERROR(cudaMalloc(&d_K_y, size_y));
+    CHECK_CUDA_ERROR(cudaMalloc(&d_K_y_half, size_y));
 
     // Copy data to GPU - 2D arrays
     CHECK_CUDA_ERROR(cudaMemcpy(d_vx, vx, size_2d, cudaMemcpyHostToDevice));
@@ -235,59 +283,33 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
     CHECK_CUDA_ERROR(cudaMemcpy(d_memory_dsigmaxy_dx, memory_dsigmaxy_dx, size_2d, cudaMemcpyHostToDevice));
     CHECK_CUDA_ERROR(cudaMemcpy(d_memory_dsigmayy_dy, memory_dsigmayy_dy, size_2d, cudaMemcpyHostToDevice));
 
-    // Allocate memory for material parameters
-    double *d_c11, *d_c13, *d_c33, *d_c44, *d_rho;
-    CHECK_CUDA_ERROR(cudaMalloc(&d_c11, size_2d));
-    CHECK_CUDA_ERROR(cudaMalloc(&d_c13, size_2d));
-    CHECK_CUDA_ERROR(cudaMalloc(&d_c33, size_2d));
-    CHECK_CUDA_ERROR(cudaMalloc(&d_c44, size_2d));
-    CHECK_CUDA_ERROR(cudaMalloc(&d_rho, size_2d));
-
-    // Copy data to GPU - Material parameters
+    // Copy material parameters
     CHECK_CUDA_ERROR(cudaMemcpy(d_c11, c11, size_2d, cudaMemcpyHostToDevice));
     CHECK_CUDA_ERROR(cudaMemcpy(d_c13, c13, size_2d, cudaMemcpyHostToDevice));
     CHECK_CUDA_ERROR(cudaMemcpy(d_c33, c33, size_2d, cudaMemcpyHostToDevice));
     CHECK_CUDA_ERROR(cudaMemcpy(d_c44, c44, size_2d, cudaMemcpyHostToDevice));
     CHECK_CUDA_ERROR(cudaMemcpy(d_rho, rho, size_2d, cudaMemcpyHostToDevice));
 
-    // Allocate PML parameter pointers - 1D arrays
-    size_t size_1d_x = NX * sizeof(double);
-    size_t size_1d_y = NY * sizeof(double);
-    double *d_b_x, *d_b_y, *d_b_x_half, *d_b_y_half;
-    double *d_a_x, *d_a_y, *d_a_x_half, *d_a_y_half;
-    double *d_K_x, *d_K_y, *d_K_x_half, *d_K_y_half;
-    
-    CHECK_CUDA_ERROR(cudaMalloc(&d_b_x, size_1d_x));
-    CHECK_CUDA_ERROR(cudaMalloc(&d_b_y, size_1d_y));
-    CHECK_CUDA_ERROR(cudaMalloc(&d_b_x_half, size_1d_x));
-    CHECK_CUDA_ERROR(cudaMalloc(&d_b_y_half, size_1d_y));
-    CHECK_CUDA_ERROR(cudaMalloc(&d_a_x, size_1d_x));
-    CHECK_CUDA_ERROR(cudaMalloc(&d_a_y, size_1d_y));
-    CHECK_CUDA_ERROR(cudaMalloc(&d_a_x_half, size_1d_x));
-    CHECK_CUDA_ERROR(cudaMalloc(&d_a_y_half, size_1d_y));
-    CHECK_CUDA_ERROR(cudaMalloc(&d_K_x, size_1d_x));
-    CHECK_CUDA_ERROR(cudaMalloc(&d_K_y, size_1d_y));
-    CHECK_CUDA_ERROR(cudaMalloc(&d_K_x_half, size_1d_x));
-    CHECK_CUDA_ERROR(cudaMalloc(&d_K_y_half, size_1d_y));
-
-    // Copy PML parameters - 1D arrays
-    CHECK_CUDA_ERROR(cudaMemcpy(d_b_x, b_x, size_1d_x, cudaMemcpyHostToDevice));
-    CHECK_CUDA_ERROR(cudaMemcpy(d_b_y, b_y, size_1d_y, cudaMemcpyHostToDevice));
-    CHECK_CUDA_ERROR(cudaMemcpy(d_b_x_half, b_x_half, size_1d_x, cudaMemcpyHostToDevice));
-    CHECK_CUDA_ERROR(cudaMemcpy(d_b_y_half, b_y_half, size_1d_y, cudaMemcpyHostToDevice));
-    CHECK_CUDA_ERROR(cudaMemcpy(d_a_x, a_x, size_1d_x, cudaMemcpyHostToDevice));
-    CHECK_CUDA_ERROR(cudaMemcpy(d_a_y, a_y, size_1d_y, cudaMemcpyHostToDevice));
-    CHECK_CUDA_ERROR(cudaMemcpy(d_a_x_half, a_x_half, size_1d_x, cudaMemcpyHostToDevice));
-    CHECK_CUDA_ERROR(cudaMemcpy(d_a_y_half, a_y_half, size_1d_y, cudaMemcpyHostToDevice));
-    CHECK_CUDA_ERROR(cudaMemcpy(d_K_x, K_x, size_1d_x, cudaMemcpyHostToDevice));
-    CHECK_CUDA_ERROR(cudaMemcpy(d_K_y, K_y, size_1d_y, cudaMemcpyHostToDevice));
-    CHECK_CUDA_ERROR(cudaMemcpy(d_K_x_half, K_x_half, size_1d_x, cudaMemcpyHostToDevice));
-    CHECK_CUDA_ERROR(cudaMemcpy(d_K_y_half, K_y_half, size_1d_y, cudaMemcpyHostToDevice));
+    // Copy PML parameters
+    CHECK_CUDA_ERROR(cudaMemcpy(d_b_x, b_x, size_x, cudaMemcpyHostToDevice));
+    CHECK_CUDA_ERROR(cudaMemcpy(d_b_y, b_y, size_y, cudaMemcpyHostToDevice));
+    CHECK_CUDA_ERROR(cudaMemcpy(d_b_x_half, b_x_half, size_x, cudaMemcpyHostToDevice));
+    CHECK_CUDA_ERROR(cudaMemcpy(d_b_y_half, b_y_half, size_y, cudaMemcpyHostToDevice));
+    CHECK_CUDA_ERROR(cudaMemcpy(d_a_x, a_x, size_x, cudaMemcpyHostToDevice));
+    CHECK_CUDA_ERROR(cudaMemcpy(d_a_y, a_y, size_y, cudaMemcpyHostToDevice));
+    CHECK_CUDA_ERROR(cudaMemcpy(d_a_x_half, a_x_half, size_x, cudaMemcpyHostToDevice));
+    CHECK_CUDA_ERROR(cudaMemcpy(d_a_y_half, a_y_half, size_y, cudaMemcpyHostToDevice));
+    CHECK_CUDA_ERROR(cudaMemcpy(d_K_x, K_x, size_x, cudaMemcpyHostToDevice));
+    CHECK_CUDA_ERROR(cudaMemcpy(d_K_y, K_y, size_y, cudaMemcpyHostToDevice));
+    CHECK_CUDA_ERROR(cudaMemcpy(d_K_x_half, K_x_half, size_x, cudaMemcpyHostToDevice));
+    CHECK_CUDA_ERROR(cudaMemcpy(d_K_y_half, K_y_half, size_y, cudaMemcpyHostToDevice));
 
     // Set thread block and grid dimensions
-    dim3 blockSize(16, 16);
-    dim3 gridSize((NX + blockSize.x - 1) / blockSize.x, 
-                  (NY + blockSize.y - 1) / blockSize.y);
+    dim3 blockSize(16,16);
+    dim3 gridSize(
+        (NX + blockSize.x - 1) / blockSize.x,
+        (NY + blockSize.y - 1) / blockSize.y
+    );
     
     // Launch kernels
     compute_stress_kernel<<<gridSize, blockSize>>>(d_vx, d_vy, d_sigmaxx, d_sigmayy, d_sigmaxy,
@@ -296,6 +318,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
                                                 d_b_x_half, d_b_y, d_a_x_half, d_a_y,
                                                 d_K_x_half, d_K_y,
                                                 DELTAX, DELTAY, DELTAT, NX, NY);
+    CHECK_CUDA_ERROR(cudaDeviceSynchronize());  
 
     compute_shear_stress_kernel<<<gridSize, blockSize>>>(d_vx, d_vy, d_sigmaxy,
                                                         d_memory_dvy_dx, d_memory_dvx_dy,
@@ -303,6 +326,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
                                                         d_b_x, d_b_y_half, d_a_x, d_a_y_half,
                                                         d_K_x, d_K_y_half,
                                                         DELTAX, DELTAY, DELTAT, NX, NY);
+    CHECK_CUDA_ERROR(cudaDeviceSynchronize());  
 
     compute_velocity_x_kernel<<<gridSize, blockSize>>>(d_vx, d_sigmaxx, d_sigmaxy,
                                                       d_memory_dsigmaxx_dx, d_memory_dsigmaxy_dy,
@@ -310,6 +334,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
                                                       d_b_x, d_b_y, d_a_x, d_a_y,
                                                       d_K_x, d_K_y,
                                                       DELTAX, DELTAY, DELTAT, NX, NY);
+    CHECK_CUDA_ERROR(cudaDeviceSynchronize());  
 
     compute_velocity_y_kernel<<<gridSize, blockSize>>>(d_vy, d_sigmaxy, d_sigmayy,
                                                       d_memory_dsigmaxy_dx, d_memory_dsigmayy_dy,
@@ -317,6 +342,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
                                                       d_b_x_half, d_b_y_half, d_a_x_half, d_a_y_half,
                                                       d_K_x_half, d_K_y_half,
                                                       DELTAX, DELTAY, DELTAT, NX, NY);
+    CHECK_CUDA_ERROR(cudaDeviceSynchronize());  
 
     // Check for kernel execution errors
     CHECK_CUDA_ERROR(cudaGetLastError());
@@ -325,6 +351,14 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
     // Copy results back to host
     CHECK_CUDA_ERROR(cudaMemcpy(vx, d_vx, size_2d, cudaMemcpyDeviceToHost));
     CHECK_CUDA_ERROR(cudaMemcpy(vy, d_vy, size_2d, cudaMemcpyDeviceToHost));
+
+    // Create output matrices
+    plhs[0] = mxCreateDoubleMatrix(NX, NY, mxREAL);
+    plhs[1] = mxCreateDoubleMatrix(NX, NY, mxREAL);
+    
+    // Copy results to output matrices
+    memcpy(mxGetPr(plhs[0]), vx, size_2d);
+    memcpy(mxGetPr(plhs[1]), vy, size_2d);
 
     // Free GPU memory
     cudaFree(d_vx); cudaFree(d_vy);
@@ -341,10 +375,4 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
     cudaFree(d_a_x_half); cudaFree(d_a_y_half);
     cudaFree(d_K_x); cudaFree(d_K_y);
     cudaFree(d_K_x_half); cudaFree(d_K_y_half);
-
-    // Create output matrices and copy results
-    plhs[0] = mxCreateDoubleMatrix(NX, NY, mxREAL);
-    plhs[1] = mxCreateDoubleMatrix(NX, NY, mxREAL);
-    memcpy(mxGetPr(plhs[0]), vx, NX * NY * sizeof(double));
-    memcpy(mxGetPr(plhs[1]), vy, NX * NY * sizeof(double));
 } 

@@ -775,11 +775,11 @@ classdef VTI_WaveFieldSolver < handle
             dt = obj.DELTAT;
             
             % Prepare data for MEX function
-            vx = obj.vx;           % x-direction velocity field
-            vy = obj.vy;           % y-direction velocity field
-            sigmaxx = obj.sigmaxx; % x-direction stress
-            sigmayy = obj.sigmayy; % y-direction stress
-            sigmaxy = obj.sigmaxy; % shear stress
+            vx = obj.vx;           
+            vy = obj.vy;           
+            sigmaxx = obj.sigmaxx; 
+            sigmayy = obj.sigmayy; 
+            sigmaxy = obj.sigmaxy; 
 
             % Memory variables
             memory_dvx_dx = obj.memory_dvx_dx; 
@@ -829,7 +829,7 @@ classdef VTI_WaveFieldSolver < handle
                 K_x, K_y, K_x_half, K_y_half, ...
                 DELTAX, DELTAY, DELTAT, NX, NY);
 
-            % Update class member variables with MEX output
+            % Update only velocity fields
             obj.vx = vx;
             obj.vy = vy;
         end
