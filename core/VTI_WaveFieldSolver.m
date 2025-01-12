@@ -605,7 +605,6 @@ classdef VTI_WaveFieldSolver < handle
         end
 
         function compute_wave_propagation_cpu1(obj)
-
             % 使用类成员变量
             dx = obj.DELTAX;
             dy = obj.DELTAY;
