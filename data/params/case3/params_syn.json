@@ -63,7 +63,7 @@
     "// 输出控制参数": null,
     "IT_DISPLAY": 100,
     "save_snapshots": true,
-    "compute_kernel": "cuda_mex",
+    "compute_kernel": "openMP",
 
     "adjoint_params": {
         "save_adjoint_snapshots": true,
