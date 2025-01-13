@@ -36,9 +36,6 @@
 %
 
 function plot_adjoint_snapshots(json_path, data_path, output_dir, component)
-    % 从JSON文件读取参数并绘制伴随波场快照
-    
-    % 读取JSON文件
     try
         fid = fopen(json_path, 'r');
         raw = fread(fid, inf);

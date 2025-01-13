@@ -34,16 +34,6 @@
 %
 
 function plot_wavefield_snapshots(json_path, data_path, output_dir, component)
-    % 从JSON文件读取参数并绘制波场快照
-    % 参数:
-    %   json_path: JSON参数文件路径
-    %   data_path: 波场数据.mat文件所在路径
-    %   output_dir: 图像输出路径
-    %   component: 波场分量选择（'vx'或'vy'）
-    % 输出：
-    %   - PNG格式的波场快照图像
-    
-    % 读取JSON文件
     try
         fid = fopen(json_path, 'r');
         raw = fread(fid, inf);
