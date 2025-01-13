@@ -597,7 +597,6 @@ classdef VTI_WaveFieldSolver < handle
                 case 'cpu_mex'
                     obj.compute_wave_propagation_cpu2();  % C++ CPU实现
                 case 'cuda_mex'
-                    warning('cuda代码计算结果错误，请停止使用');  % 添加警告信息
                     obj.compute_wave_propagation_gpu();   % CUDA GPU实现
                 otherwise
                     error('Unknown compute kernel type: %s', obj.compute_kernel);
@@ -820,7 +819,9 @@ classdef VTI_WaveFieldSolver < handle
             NY = obj.NY;
 
             % Call the GPU MEX file
-            [vx, vy] = compute_wave_propagation_gpu(vx, vy, sigmaxx, sigmayy, sigmaxy, ...
+            %[vx, vy] =  VTI_WaveFieldSolver_SIMD
+            %[vx, vy] = compute_wave_propagation_omp
+            [vx, vy] =  compute_wave_propagation_omp(vx, vy, sigmaxx, sigmayy, sigmaxy, ...
                 memory_dvx_dx, memory_dvy_dy, memory_dvy_dx, memory_dvx_dy, ...
                 memory_dsigmaxx_dx, memory_dsigmaxy_dy, memory_dsigmaxy_dx, memory_dsigmayy_dy, ...
                 c11, c13, c33, c44, rho, ...

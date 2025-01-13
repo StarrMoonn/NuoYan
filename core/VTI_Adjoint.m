@@ -185,9 +185,9 @@ classdef VTI_Adjoint < handle
                 i = fd_solver.rec_x(irec);
                 j = fd_solver.rec_y(irec);
                 
-                % 直接赋值即可，不需要累加
-                fd_solver.vx(i,j) = residuals_vx(it, irec) * fd_solver.DELTAT;
-                fd_solver.vy(i,j) = residuals_vy(it, irec) * fd_solver.DELTAT;
+                % 不需要*dt，波动方程算子以及有dt
+                fd_solver.vx(i,j) = residuals_vx(it, irec);
+                fd_solver.vy(i,j) = residuals_vy(it, irec);
             end
         end
         
