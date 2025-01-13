@@ -1,4 +1,4 @@
-function plot_model_params(params, ax)
+function plot_model_params(params, panel)
     try
         % 从参数中获取网格信息
         nx = params.NX;
@@ -7,7 +7,11 @@ function plot_model_params(params, ax)
         dy = params.DELTAY;
         
         % 计算实际的物理范围（单位：km）
-        extent = [0, (nx-1)*dx/1000, (ny-1)*dy/1000, 0];  % [xmin, xmax, ymax, ymin]
+        x_range = [0, (nx-1)*dx/1000];  % x范围（km）
+        y_range = [0, (ny-1)*dy/1000];  % y范围（km）
+        
+        % 计算实际的纵横比
+        aspect_ratio = diff(x_range) / diff(y_range);
         
         % 获取文件路径
         c11_info = params.c11;
@@ -23,79 +27,72 @@ function plot_model_params(params, ax)
         c44 = load(c44_info.file).c44;
         rho = load(rho_info.file).rho;
         
-        % 清除现有图形
-        clf(ax);
+        % 删除面板中现有的所有子对象
+        delete(allchild(panel));
+        
+        % 在面板中创建axes对象
+        ax1 = axes('Parent', panel, 'Position', [0.05 0.55 0.25 0.4]);
+        ax2 = axes('Parent', panel, 'Position', [0.35 0.55 0.25 0.4]);
+        ax3 = axes('Parent', panel, 'Position', [0.65 0.55 0.25 0.4]);
+        ax4 = axes('Parent', panel, 'Position', [0.20 0.05 0.25 0.4]);
+        ax5 = axes('Parent', panel, 'Position', [0.50 0.05 0.25 0.4]);
         
         % 绘制C11
-        subplot(2,3,1, 'Parent', ax);
-        imagesc(extent(1:2), extent(3:4), c11');
-        axis xy;
-        pbaspect([4 1 1]);
-        colormap(jet);
-        c = colorbar;
+        imagesc(ax1, x_range, y_range, flipud(c11'));
+        colormap(ax1, 'jet');
+        c = colorbar(ax1);
         c.Label.String = 'C11 (Pa)';
-        xlabel('Distance (km)');
-        ylabel('Depth (km)');
-        title('C11');
+        xlabel(ax1, 'Distance (km)');
+        ylabel(ax1, 'Depth (km)');
+        title(ax1, 'C11');
         
         % 绘制C13
-        subplot(2,3,2, 'Parent', ax);
-        imagesc(extent(1:2), extent(3:4), c13');
-        axis xy;
-        pbaspect([4 1 1]);
-        colormap(jet);
-        c = colorbar;
+        imagesc(ax2, x_range, y_range, flipud(c13'));
+        colormap(ax2, 'jet');
+        c = colorbar(ax2);
         c.Label.String = 'C13 (Pa)';
-        xlabel('Distance (km)');
-        ylabel('Depth (km)');
-        title('C13');
+        xlabel(ax2, 'Distance (km)');
+        ylabel(ax2, 'Depth (km)');
+        title(ax2, 'C13');
         
         % 绘制C33
-        subplot(2,3,3, 'Parent', ax);
-        imagesc(extent(1:2), extent(3:4), c33');
-        axis xy;
-        pbaspect([4 1 1]);
-        colormap(jet);
-        c = colorbar;
+        imagesc(ax3, x_range, y_range, flipud(c33'));
+        colormap(ax3, 'jet');
+        c = colorbar(ax3);
         c.Label.String = 'C33 (Pa)';
-        xlabel('Distance (km)');
-        ylabel('Depth (km)');
-        title('C33');
+        xlabel(ax3, 'Distance (km)');
+        ylabel(ax3, 'Depth (km)');
+        title(ax3, 'C33');
         
         % 绘制C44
-        subplot(2,3,4, 'Parent', ax);
-        imagesc(extent(1:2), extent(3:4), c44');
-        axis xy;
-        pbaspect([4 1 1]);
-        colormap(jet);
-        c = colorbar;
+        imagesc(ax4, x_range, y_range, flipud(c44'));
+        colormap(ax4, 'jet');
+        c = colorbar(ax4);
         c.Label.String = 'C44 (Pa)';
-        xlabel('Distance (km)');
-        ylabel('Depth (km)');
-        title('C44');
+        xlabel(ax4, 'Distance (km)');
+        ylabel(ax4, 'Depth (km)');
+        title(ax4, 'C44');
         
         % 绘制密度分布
-        subplot(2,3,5, 'Parent', ax);
-        imagesc(extent(1:2), extent(3:4), rho');
-        axis xy;
-        pbaspect([4 1 1]);
-        colormap(jet);
-        c = colorbar;
+        imagesc(ax5, x_range, y_range, flipud(rho'));
+        colormap(ax5, 'jet');
+        c = colorbar(ax5);
         c.Label.String = 'Density (kg/m³)';
-        xlabel('Distance (km)');
-        ylabel('Depth (km)');
-        title('Density Distribution');
+        xlabel(ax5, 'Distance (km)');
+        ylabel(ax5, 'Depth (km)');
+        title(ax5, 'Density');
         
-        % 设置所有子图的刻度
-        for i = 1:5
-            subplot(2,3,i, 'Parent', ax);
-            set(gca, 'XTick', linspace(extent(1), extent(2), 5));
-            set(gca, 'YTick', linspace(extent(4), extent(3), 3));
+        % 设置所有axes的属性
+        all_axes = [ax1, ax2, ax3, ax4, ax5];
+        for ax = all_axes
+            % 设置刻度
+            set(ax, 'XTick', linspace(x_range(1), x_range(2), 5));
+            set(ax, 'YTick', linspace(y_range(1), y_range(2), 5));
+            % 根据实际模型尺寸设置纵横比
+            pbaspect(ax, [aspect_ratio 1 1]);
+            % 设置box属性
+            box(ax, 'on');
         end
-        
-        % 调整子图间距
-        set(ax, 'Units', 'normalized');
-        set(ax, 'Position', [0.05, 0.05, 0.9, 0.85]);
         
     catch ME
         error('绘图失败: %s', ME.message);
