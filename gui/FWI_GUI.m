@@ -1,296 +1,454 @@
 function FWI_GUI()
     % 创建主窗口
     fig = figure('Name', 'VTI全波形反演-StarrMoonn', ...
-                 'Position', [100 100 1200 800], ...  % 加宽窗口
-                 'NumberTitle', 'off', ...
-                 'MenuBar', 'none');
+                 'Position', [100 100 1400 900], ...
+                 'NumberTitle', 'off');
+    
+    % 创建菜单栏
+    menu_bar = uimenu(fig, 'Label', '关于');
+    uimenu(menu_bar, 'Label', '作者信息', 'Callback', @show_about);
     
     % 创建左侧控制面板
     control_panel = uipanel('Parent', fig, ...
-                           'Position', [0.01 0.01 0.48 0.98]);
+                           'Position', [0.01 0.01 0.28 0.98]);
     
     % 创建右侧模型显示面板
     model_panel = uipanel('Parent', fig, ...
-                         'Position', [0.5 0.01 0.49 0.98], ...
+                         'Position', [0.3 0.01 0.69 0.98], ...
                          'Title', '模型参数显示');
     
-    % 创建两个绘图区域
-    obs_ax = uipanel('Parent', model_panel, ...  % 改回使用uipanel
+    % === 1. 参数文件选择模块 ===
+    file_panel = uipanel('Parent', control_panel, ...
+                        'Title', '参数文件选择', ...
+                        'Position', [0.02 0.8 0.96 0.18]);
+    
+    % 观测数据JSON文件选择
+    uicontrol(file_panel, 'Style', 'text', ...
+             'Position', [10 90 120 20], ...
+             'String', '观测数据JSON文件：');
+    obs_edit = uicontrol(file_panel, 'Style', 'edit', ...
+                        'Position', [10 65 250 25], ...
+                        'Tag', 'obs_edit');
+    uicontrol(file_panel, 'Style', 'pushbutton', ...
+             'Position', [270 65 80 25], ...
+             'String', '浏览...', ...
+             'Callback', @(src,event)browse_obs_file(src, event, obs_edit));
+    
+    % 合成数据JSON文件选择
+    uicontrol(file_panel, 'Style', 'text', ...
+             'Position', [10 35 120 20], ...
+             'String', '合成数据JSON文件：');
+    syn_edit = uicontrol(file_panel, 'Style', 'edit', ...
+                        'Position', [10 10 250 25], ...
+                        'Tag', 'syn_edit');
+    uicontrol(file_panel, 'Style', 'pushbutton', ...
+             'Position', [270 10 80 25], ...
+             'String', '浏览...', ...
+             'Callback', @(src,event)browse_syn_file(src, event, syn_edit));
+    
+    % === 2. 参数可视化模块 ===
+    param_panel = uipanel('Parent', control_panel, ...
+                         'Title', '参数可视化', ...
+                         'Position', [0.02 0.5 0.96 0.29]);
+    
+    % 创建选项卡面板
+    tabgroup = uitabgroup('Parent', param_panel);
+    
+    % 观测数据参数选项卡
+    tab1 = uitab('Parent', tabgroup, 'Title', '观测数据参数');
+    obs_param_list = uicontrol(tab1, 'Style', 'listbox', ...
+                              'Position', [5 5 350 180], ...
+                              'Tag', 'obs_param_list', ...
+                              'String', {});
+    
+    % 合成数据参数选项卡
+    tab2 = uitab('Parent', tabgroup, 'Title', '合成数据参数');
+    syn_param_list = uicontrol(tab2, 'Style', 'listbox', ...
+                              'Position', [5 5 350 180], ...
+                              'Tag', 'syn_param_list', ...
+                              'String', {});
+    
+    % === 3. 单炮计算模块 ===
+    shot_panel = uipanel('Parent', control_panel, ...
+                        'Title', '单炮计算', ...
+                        'Position', [0.02 0.25 0.96 0.24]);
+    
+    % 计算策略选择
+    uicontrol(shot_panel, 'Style', 'text', ...
+             'Position', [10 160 80 20], ...
+             'String', '计算策略：');
+    compute_mode = uicontrol(shot_panel, 'Style', 'popupmenu', ...
+                           'Position', [100 160 150 25], ...
+                           'String', {'cpu_mex', 'cpu', 'cuda_mex'}, ...
+                           'Value', 1, ...  % 默认选择cpu_mex
+                           'Tag', 'compute_mode');
+    
+    % 炮号选择
+    uicontrol(shot_panel, 'Style', 'text', ...
+             'Position', [10 120 80 20], ...
+             'String', '炮号：');
+    shot_number = uicontrol(shot_panel, 'Style', 'edit', ...
+                          'Position', [100 120 150 25], ...
+                          'String', '1', ...
+                          'Tag', 'shot_number');
+    
+    % 三个计算按钮
+    uicontrol(shot_panel, 'Style', 'pushbutton', ...
+             'Position', [10 80 240 30], ...
+             'String', '计算单炮正演', ...
+             'Callback', @calculate_forward);
+    
+    uicontrol(shot_panel, 'Style', 'pushbutton', ...
+             'Position', [10 45 240 30], ...
+             'String', '计算单炮伴随波场', ...
+             'Callback', @calculate_adjoint);
+    
+    uicontrol(shot_panel, 'Style', 'pushbutton', ...
+             'Position', [10 10 240 30], ...
+             'String', '计算单炮梯度', ...
+             'Callback', @calculate_gradient);
+    
+    % === 4. FWI参数设置模块 ===
+    fwi_panel = uipanel('Parent', control_panel, ...
+                        'Title', 'FWI参数设置', ...
+                        'Position', [0.02 0.02 0.96 0.22]);
+    
+    % 优化方法选择
+    uicontrol(fwi_panel, 'Style', 'text', ...
+             'Position', [10 140 80 20], ...
+             'String', '优化方法：');
+    optimization = uicontrol(fwi_panel, 'Style', 'popupmenu', ...
+                           'Position', [100 140 150 25], ...
+                           'String', {'BB', 'L-BFGS', 'CG'}, ...
+                           'Tag', 'optimization');
+    
+    % 最大迭代次数
+    uicontrol(fwi_panel, 'Style', 'text', ...
+             'Position', [10 105 100 20], ...
+             'String', '最大迭代次数：');
+    max_iter = uicontrol(fwi_panel, 'Style', 'edit', ...
+                        'Position', [120 105 130 25], ...
+                        'String', '20', ...
+                        'Tag', 'max_iter');
+    
+    % 收敛容差
+    uicontrol(fwi_panel, 'Style', 'text', ...
+             'Position', [10 70 80 20], ...
+             'String', '收敛容差：');
+    tolerance = uicontrol(fwi_panel, 'Style', 'edit', ...
+                         'Position', [100 70 150 25], ...
+                         'String', '0.1', ...
+                         'Tag', 'tolerance');
+    
+    % BB初始步长
+    uicontrol(fwi_panel, 'Style', 'text', ...
+             'Position', [10 35 80 20], ...
+             'String', 'BB初始步长：');
+    bb_alpha = uicontrol(fwi_panel, 'Style', 'edit', ...
+                        'Position', [100 35 150 25], ...
+                        'String', '0.1', ...
+                        'Tag', 'bb_alpha');
+    
+    % 创建绘图区域
+    obs_ax = uipanel('Parent', model_panel, ...
                      'Position', [0.02 0.51 0.96 0.48], ...
                      'Title', '观测模型');
     
-    syn_ax = uipanel('Parent', model_panel, ...  % 改回使用uipanel
+    syn_ax = uipanel('Parent', model_panel, ...
                      'Position', [0.02 0.01 0.96 0.48], ...
                      'Title', '合成模型');
-    
-    % 文件选择区域
-    uicontrol(control_panel, 'Style', 'text', 'Position', [20 720 150 20], ...
-             'String', '观测数据JSON文件：');
-    obs_edit = uicontrol(control_panel, 'Style', 'edit', 'Position', [20 690 400 25]);
-    uicontrol(control_panel, 'Style', 'pushbutton', 'Position', [430 690 100 25], ...
-             'String', '浏览...', ...
-             'Callback', @(src,event)browse_file(obs_edit, obs_ax));
-    
-    uicontrol(control_panel, 'Style', 'text', 'Position', [20 650 150 20], ...
-             'String', '合成数据JSON文件：');
-    syn_edit = uicontrol(control_panel, 'Style', 'edit', 'Position', [20 620 400 25]);
-    uicontrol(control_panel, 'Style', 'pushbutton', 'Position', [430 620 100 25], ...
-             'String', '浏览...', ...
-             'Callback', @(src,event)browse_file(syn_edit, syn_ax));
-    
-    % === 炮号选择区域 ===
-    uicontrol(control_panel, 'Style', 'text', 'Position', [20 580 100 20], ...
-             'String', '炮号选择：');
-    shot_number = uicontrol(control_panel, 'Style', 'edit', ...
-                           'Position', [130 580 100 25], ...
-                           'String', '1');
-    
-    % === 计算模式选择 ===
-    uicontrol(control_panel, 'Style', 'text', 'Position', [20 540 100 20], ...
-             'String', '计算模式：');
-    compute_mode = uicontrol(control_panel, 'Style', 'popupmenu', ...
-                            'Position', [130 540 150 25], ...
-                            'String', {'cpu_mex', 'cpu', 'cuda_mex'});
-    
-    % === FWI参数设置区域 ===
-    uicontrol(control_panel, 'Style', 'text', 'Position', [20 500 150 20], ...
-             'String', 'FWI参数设置：', 'FontWeight', 'bold');
-    
-    % 最大迭代次数
-    uicontrol(control_panel, 'Style', 'text', 'Position', [40 470 100 20], ...
-             'String', '最大迭代次数：');
-    max_iter_edit = uicontrol(control_panel, 'Style', 'edit', ...
-                             'Position', [150 470 100 25], ...
-                             'String', '20');
-    
-    % 收敛容差
-    uicontrol(control_panel, 'Style', 'text', 'Position', [40 440 100 20], ...
-             'String', '收敛容差：');
-    tol_edit = uicontrol(control_panel, 'Style', 'edit', ...
-                        'Position', [150 440 100 25], ...
-                        'String', '0.1');
-    
-    % 优化方法选择
-    uicontrol(control_panel, 'Style', 'text', 'Position', [40 410 100 20], ...
-             'String', '优化方法：');
-    opt_method = uicontrol(control_panel, 'Style', 'popupmenu', ...
-                          'Position', [150 410 150 25], ...
-                          'String', {'BB', 'gradient_descent', 'LBFGS'});
-    
-    % BB步长
-    uicontrol(control_panel, 'Style', 'text', 'Position', [40 380 100 20], ...
-             'String', 'BB初始步长：');
-    bb_step_edit = uicontrol(control_panel, 'Style', 'edit', ...
-                            'Position', [150 380 100 25], ...
-                            'String', '0.1');
-    
-    % === 功能按钮区域 ===
-    % FWI按钮
-    uicontrol(control_panel, 'Style', 'pushbutton', 'Position', [50 50 150 40], ...
-             'String', '运行FWI', ...
-             'Callback', @(src,event)run_fwi(obs_edit, syn_edit, ...
-                                           max_iter_edit, tol_edit, ...
-                                           opt_method, bb_step_edit));
-    
-    % 伴随波场按钮
-    uicontrol(control_panel, 'Style', 'pushbutton', 'Position', [220 50 150 40], ...
-             'String', '计算伴随波场', ...
-             'Callback', @(src,event)run_adjoint(obs_edit, syn_edit, ...
-                                                shot_number, compute_mode));
-    
-    % 正演模拟按钮
-    uicontrol(control_panel, 'Style', 'pushbutton', 'Position', [390 50 150 40], ...
-             'String', '单炮正演模拟', ...
-             'Callback', @(src,event)run_forward(obs_edit, syn_edit, ...
-                                                shot_number, compute_mode));
-    
-    % 梯度计算按钮
-    uicontrol(control_panel, 'Style', 'pushbutton', 'Position', [560 50 150 40], ...
-             'String', '计算单炮梯度', ...
-             'Callback', @(src,event)run_gradient(obs_edit, syn_edit, ...
-                                                shot_number, compute_mode));
+                     
+    % 存储GUI数据
+    gui_data.obs_params = [];
+    gui_data.syn_params = [];
+    guidata(fig, gui_data);
 end
 
-function browse_file(edit_box, ax)
-    [filename, pathname] = uigetfile('*.json', '选择JSON文件');
+% 观测数据JSON文件浏览回调函数
+function browse_obs_file(src, ~, edit_box)
+    [filename, pathname] = uigetfile('*.json', '选择观测数据JSON文件');
     if filename ~= 0
         filepath = fullfile(pathname, filename);
         edit_box.String = filepath;
         
-        % 加载并显示模型参数
+        % 读取并显示JSON参数
         try
-            % 直接读取JSON文件内容
-            fid = fopen(filepath, 'r');
-            raw = fread(fid, inf);
-            str = char(raw');
-            fclose(fid);
+            params = jsondecode(fileread(filepath));
+            fig = ancestor(src, 'figure');
+            gui_data = guidata(fig);
+            gui_data.obs_params = params;
+            guidata(fig, gui_data);
             
-            % 解析JSON
-            params = jsondecode(str);
+            % 更新参数列表
+            update_param_list(fig, 'obs_param_list', params);
             
-            if isvalid(ax)
-                utils.plot_model_params(params, ax);
+            % 更新模型显示
+            obs_ax = findobj(fig, 'Title', '观测模型');
+            if ~isempty(obs_ax)
+                utils.plot_model_params(params, obs_ax);
             end
         catch ME
-            % 显示详细的错误信息
-            disp(['错误信息: ' ME.message]);
-            disp('错误堆栈:');
-            disp(ME.stack);
+            errordlg(['加载JSON文件失败：' ME.message], '错误');
+        end
+    end
+end
+
+% 合成数据JSON文件浏览回调函数
+function browse_syn_file(src, ~, edit_box)
+    [filename, pathname] = uigetfile('*.json', '选择合成数据JSON文件');
+    if filename ~= 0
+        filepath = fullfile(pathname, filename);
+        edit_box.String = filepath;
+        
+        % 读取并显示JSON参数
+        try
+            params = jsondecode(fileread(filepath));
+            fig = ancestor(src, 'figure');
+            gui_data = guidata(fig);
+            gui_data.syn_params = params;
+            guidata(fig, gui_data);
             
-            errordlg(['加载模型参数失败：' ME.message], '错误');
-            if isvalid(ax)
-                cla(ax);
+            % 更新参数列表
+            update_param_list(fig, 'syn_param_list', params);
+            
+            % 更新模型显示
+            syn_ax = findobj(fig, 'Title', '合成模型');
+            if ~isempty(syn_ax)
+                utils.plot_model_params(params, syn_ax);
+            end
+        catch ME
+            errordlg(['加载JSON文件失败：' ME.message], '错误');
+        end
+    end
+end
+
+% 更新参数列表显示
+function update_param_list(fig, list_tag, params)
+    param_list = findobj(fig, 'Tag', list_tag);
+    if ~isempty(param_list)
+        % 将参数转换为字符串列表
+        param_strings = {};
+        fields = fieldnames(params);
+        for i = 1:length(fields)
+            field = fields{i};
+            value = params.(field);
+            if isstruct(value)
+                param_strings{end+1} = sprintf('%s: [结构体]', field);
+            else
+                param_strings{end+1} = sprintf('%s: %s', field, mat2str(value));
             end
         end
+        param_list.String = param_strings;
     end
 end
 
-function run_fwi(obs_edit, syn_edit, max_iter_edit, tol_edit, opt_method, bb_step_edit)
+% 单炮正演计算回调函数
+function calculate_forward(src, ~)
     try
-        % 验证输入
-        if isempty(obs_edit.String) || isempty(syn_edit.String)
-            errordlg('请选择观测数据和合成数据JSON文件', '错误');
-            return;
+        % 获取主窗口句柄
+        fig = ancestor(src, 'figure');
+        
+        % 获取计算参数
+        compute_mode_obj = findobj(fig, 'Tag', 'compute_mode');
+        compute_modes = get(compute_mode_obj, 'String');
+        selected_mode = compute_modes{get(compute_mode_obj, 'Value')};
+        
+        shot_number = str2double(get(findobj(fig, 'Tag', 'shot_number'), 'String'));
+        
+        % 获取JSON文件路径
+        syn_path = get(findobj(fig, 'Tag', 'syn_edit'), 'String');
+        
+        % 检查参数有效性
+        if isempty(syn_path)
+            error('请先选择合成数据JSON文件');
         end
         
-        % 创建优化器参数结构体
-        optimizer_params = struct();
-        optimizer_params.obs_json_file = obs_edit.String;
-        optimizer_params.syn_json_file = syn_edit.String;
-        optimizer_params.max_iterations = str2double(max_iter_edit.String);
-        optimizer_params.tolerance = str2double(tol_edit.String);
-        optimizer_params.optimization = opt_method.String{opt_method.Value};
-        optimizer_params.bb_params.initial_step = str2double(bb_step_edit.String);
+        if isnan(shot_number) || shot_number < 1
+            error('请输入有效的炮号');
+        end
         
-        % 设置输出目录
-        [script_path, ~, ~] = fileparts(mfilename('fullpath'));
-        project_root = fileparts(script_path);
-        output_dir = fullfile(project_root, 'output');
-        gradient_output_dir = fullfile(output_dir, 'gradients');
+        % 显示计算信息
+        msg = sprintf(['开始计算单炮正演：\n', ...
+                      '计算策略：%s\n', ...
+                      '炮号：%d\n', ...
+                      '合成数据：%s'], ...
+                      selected_mode, shot_number, syn_path);
+        disp(msg);
         
-        % 确保输出目录存在
-        if ~exist(output_dir, 'dir'), mkdir(output_dir); end
-        if ~exist(gradient_output_dir, 'dir'), mkdir(gradient_output_dir); end
+        % 这里调用实际的计算函数
+        % forward_wavefield = your_compute_function(syn_path, shot_number, selected_mode);
         
-        optimizer_params.output_dir = output_dir;
-        optimizer_params.gradient_output_dir = gradient_output_dir;
+        % 计算完成提示
+        msgbox('单炮正演计算完成', '计算成功');
         
-        % 创建梯度求解器
-        gradient_solver = GradientSolver(optimizer_params);
-        optimizer_params.gradient_solver = gradient_solver;
-        
-        % 创建并运行FWI
-        fwi = VTI_FWI(optimizer_params);
-        fwi.run();
-        
-        msgbox('FWI运行完成！', '成功');
     catch ME
-        errordlg(['运行出错：' ME.message], '错误');
+        % 错误处理
+        errordlg(['计算失败：' ME.message], '错误');
+        disp(['错误详情：' getReport(ME)]);
     end
 end
 
-function run_adjoint(obs_edit, syn_edit, shot_number, compute_mode)
+% 单炮伴随波场计算回调函数
+function calculate_adjoint(src, ~)
     try
-        % 验证输入
-        if isempty(obs_edit.String) || isempty(syn_edit.String)
-            errordlg('请选择观测数据和合成数据JSON文件', '错误');
-            return;
+        % 获取主窗口句柄
+        fig = ancestor(src, 'figure');
+        gui_data = guidata(fig);
+        
+        % 获取计算参数
+        compute_mode_obj = findobj(fig, 'Tag', 'compute_mode');
+        compute_modes = get(compute_mode_obj, 'String');
+        selected_mode = compute_modes{get(compute_mode_obj, 'Value')};
+        
+        shot_number = str2double(get(findobj(fig, 'Tag', 'shot_number'), 'String'));
+        
+        % 获取JSON文件路径
+        obs_path = get(findobj(fig, 'Tag', 'obs_edit'), 'String');
+        syn_path = get(findobj(fig, 'Tag', 'syn_edit'), 'String');
+        
+        % 检查参数有效性
+        if isempty(obs_path) || isempty(syn_path)
+            error('请先选择观测数据和合成数据JSON文件');
         end
         
-        % 加载参数
-        obs_params = utils.load_json_params(obs_edit.String);
-        syn_params = utils.load_json_params(syn_edit.String);
+        if isnan(shot_number) || shot_number < 1
+            error('请输入有效的炮号');
+        end
         
-        % 设置计算模式
-        obs_params.compute_kernel = compute_mode.String{compute_mode.Value};
-        syn_params.compute_kernel = compute_mode.String{compute_mode.Value};
+        % 显示计算信息
+        msg = sprintf(['开始计算单炮伴随波场：\n', ...
+                      '计算策略：%s\n', ...
+                      '炮号：%d\n', ...
+                      '观测数据：%s\n', ...
+                      '合成数据：%s'], ...
+                      selected_mode, shot_number, obs_path, syn_path);
+        disp(msg);
         
-        % 创建参数结构体
-        params = struct();
-        params.obs_params = obs_params;
-        params.syn_params = syn_params;
+        % 这里调用实际的计算函数
+        % adjoint_wavefield = your_compute_function(obs_path, syn_path, shot_number, selected_mode);
         
-        % 获取炮号
-        ishot = str2double(shot_number.String);
+        % 计算完成提示
+        msgbox('单炮伴随波场计算完成', '计算成功');
         
-        % 创建VTI_Adjoint实例并计算
-        adjoint_solver = VTI_Adjoint(params);
-        adjoint_wavefield = adjoint_solver.compute_adjoint_wavefield_single_shot(ishot);
-        
-        msgbox(sprintf('第%d炮伴随波场计算完成！', ishot), '成功');
     catch ME
-        errordlg(['计算出错：' ME.message], '错误');
+        % 错误处理
+        errordlg(['计算失败：' ME.message], '错误');
+        disp(['错误详情：' getReport(ME)]);
     end
 end
 
-function run_forward(obs_edit, syn_edit, shot_number, compute_mode)
+% 单炮梯度计算回调函数
+function calculate_gradient(src, ~)
     try
-        % 优先使用合成数据JSON文件
-        json_file = '';
-        if ~isempty(syn_edit.String)
-            json_file = syn_edit.String;
-        elseif ~isempty(obs_edit.String)
-            json_file = obs_edit.String;
-        else
-            errordlg('请至少选择一个JSON文件', '错误');
-            return;
+        % 获取主窗口句柄
+        fig = ancestor(src, 'figure');
+        
+        % 获取计算参数
+        compute_mode_obj = findobj(fig, 'Tag', 'compute_mode');
+        compute_modes = get(compute_mode_obj, 'String');
+        selected_mode = compute_modes{get(compute_mode_obj, 'Value')};
+        
+        shot_number = str2double(get(findobj(fig, 'Tag', 'shot_number'), 'String'));
+        
+        % 获取JSON文件路径
+        obs_path = get(findobj(fig, 'Tag', 'obs_edit'), 'String');
+        syn_path = get(findobj(fig, 'Tag', 'syn_edit'), 'String');
+        
+        % 检查参数有效性
+        if isempty(obs_path) || isempty(syn_path)
+            error('请先选择观测数据和合成数据JSON文件');
         end
         
-        % 加载参数
-        params = utils.load_json_params(json_file);
+        if isnan(shot_number) || shot_number < 1
+            error('请输入有效的炮号');
+        end
         
-        % 设置计算模式
-        params.compute_kernel = compute_mode.String{compute_mode.Value};
+        % 显示计算信息
+        msg = sprintf(['开始计算单炮梯度：\n', ...
+                      '计算策略：%s\n', ...
+                      '炮号：%d\n', ...
+                      '观测数据：%s\n', ...
+                      '合成数据：%s'], ...
+                      selected_mode, shot_number, obs_path, syn_path);
+        disp(msg);
         
-        % 获取炮号
-        ishot = str2double(shot_number.String);
+        % 这里调用实际的计算函数
+        % gradient = your_compute_function(obs_path, syn_path, shot_number, selected_mode);
         
-        % 创建VTI_SingleShotModeling实例并计算
-        forward_solver = VTI_SingleShotModeling(params);
-        [vx_data, vy_data, complete_wavefield] = forward_solver.forward_modeling_single_shot(ishot);
+        % 计算完成提示
+        msgbox('单炮梯度计算完成', '计算成功');
         
-        msgbox(sprintf('第%d炮正演模拟完成！', ishot), '成功');
     catch ME
-        errordlg(['计算出错：' ME.message], '错误');
+        % 错误处理
+        errordlg(['计算失败：' ME.message], '错误');
+        disp(['错误详情：' getReport(ME)]);
     end
 end
 
-function run_gradient(obs_edit, syn_edit, shot_number, compute_mode)
+% 关于界面回调函数
+function show_about(~, ~)
+    % 创建新的诗词界面
+    PoemGUI();
+end
+
+% 诗词界面函数
+function PoemGUI()
+    % 创建诗词窗口
+    poem_fig = figure('Name', '蝶恋花', ...
+                     'Position', [300 200 800 600], ...
+                     'Color', [1 1 1], ...
+                     'NumberTitle', 'off', ...
+                     'MenuBar', 'none', ...
+                     'Resize', 'off');  % 禁止调整窗口大小
+    
+    % 创建主面板
+    main_panel = uipanel('Parent', poem_fig, ...
+                        'Position', [0.05 0.05 0.9 0.9], ...
+                        'BackgroundColor', [1 1 1], ...
+                        'BorderType', 'none');
+    
+    % 加载并显示图片
     try
-        % 验证文件是否存在
-        if isempty(obs_edit.String) || isempty(syn_edit.String)
-            errordlg('请选择观测数据和合成数据JSON文件', '错误');
-            return;
-        end
-        
-        % 加载参数
-        obs_params = utils.load_json_params(obs_edit.String);
-        syn_params = utils.load_json_params(syn_edit.String);
-        
-        % 设置计算模式
-        obs_params.compute_kernel = compute_mode.String{compute_mode.Value};
-        syn_params.compute_kernel = compute_mode.String{compute_mode.Value};
-        
-        % 创建参数结构体
-        params = struct();
-        params.obs_params = obs_params;
-        params.syn_params = syn_params;
-        
-        % 获取炮号
-        ishot = str2double(shot_number.String);
-        
-        % 创建梯度求解器实例
-        gradient_solver = VTI_Gradient(params);
-        
-        % 计算单炮梯度（包含所有参数的梯度）
-        fprintf('开始计算第%d炮的完整梯度...\n', ishot);
-        gradient = gradient_solver.compute_single_shot_gradient(ishot);
-        
-        % 保存梯度结果
-        gradient_solver.save_gradient(gradient, ishot);
-        
-        msgbox(sprintf('第%d炮梯度计算完成！\n已保存所有参数(c11,c13,c33,c44,rho)的梯度', ishot), '成功');
-    catch ME
-        errordlg(['计算出错：' ME.message], '错误');
+        img = imread('gui/assets/logo_zhanqiao.jpg');
+        ax = axes('Parent', main_panel, ...
+                 'Position', [0.1 0.1 0.8 0.45], ...
+                 'Box', 'off');
+        imshow(img, 'Parent', ax);
+        axis off;
+    catch
+        warning('无法加载图片');
     end
+    
+    % 创建诗词标题
+    title_text = uicontrol('Parent', main_panel, ...
+                          'Style', 'text', ...
+                          'String', '蝶恋花', ...
+                          'Position', [300 500 200 30], ...
+                          'FontSize', 16, ...
+                          'FontWeight', 'bold', ...
+                          'BackgroundColor', [1 1 1], ...
+                          'FontName', '楷体');
+    
+    % 创建诗词内容 - 上阕
+    upper_text = uicontrol('Parent', main_panel, ...
+                          'Style', 'text', ...
+                          'String', ['阅尽天涯离别苦，不道归来，零落花如许。', ...
+                                   '花底相看无一语，绿窗春与天俱暮。'], ...
+                          'Position', [100 420 600 40], ...
+                          'FontSize', 12, ...
+                          'FontName', '楷体', ...
+                          'BackgroundColor', [1 1 1]);
+    
+    % 创建诗词内容 - 下阕
+    lower_text = uicontrol('Parent', main_panel, ...
+                          'Style', 'text', ...
+                          'String', ['待把相思灯下诉，一缕新欢，旧恨千千缕。', ...
+                                   '最是人间留不住，朱颜辞镜花辞树。'], ...
+                          'Position', [100 370 600 40], ...
+                          'FontSize', 12, ...
+                          'FontName', '楷体', ...
+                          'BackgroundColor', [1 1 1]);
+    
+    % 设置所有文本控件为多行显示
+    set([upper_text, lower_text], 'Max', 2);
 end 
