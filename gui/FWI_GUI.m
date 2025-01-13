@@ -1,12 +1,12 @@
 function FWI_GUI()
     % 创建主窗口
-    fig = figure('Name', 'VTI全波形反演-StarrMoonn', ...
+    fig = figure('Name', 'VTI全波形反演程序', ...
                  'Position', [100 100 1400 900], ...
                  'NumberTitle', 'off');
     
     % 创建菜单栏
-    menu_bar = uimenu(fig, 'Label', '关于');
-    uimenu(menu_bar, 'Label', '作者信息', 'Callback', @show_about);
+    menu_bar = uimenu(fig, 'Label', '关于（666）');
+    uimenu(menu_bar, 'Label', '作者信息（NB）', 'Callback', @show_about);
     
     % 创建左侧控制面板
     control_panel = uipanel('Parent', fig, ...
@@ -242,52 +242,6 @@ function update_param_list(fig, list_tag, params)
     end
 end
 
-% 单炮正演计算回调函数
-function calculate_forward(src, ~)
-    try
-        % 获取主窗口句柄
-        fig = ancestor(src, 'figure');
-        
-        % 获取计算参数
-        compute_mode_obj = findobj(fig, 'Tag', 'compute_mode');
-        compute_modes = get(compute_mode_obj, 'String');
-        selected_mode = compute_modes{get(compute_mode_obj, 'Value')};
-        
-        shot_number = str2double(get(findobj(fig, 'Tag', 'shot_number'), 'String'));
-        
-        % 获取JSON文件路径
-        syn_path = get(findobj(fig, 'Tag', 'syn_edit'), 'String');
-        
-        % 检查参数有效性
-        if isempty(syn_path)
-            error('请先选择合成数据JSON文件');
-        end
-        
-        if isnan(shot_number) || shot_number < 1
-            error('请输入有效的炮号');
-        end
-        
-        % 显示计算信息
-        msg = sprintf(['开始计算单炮正演：\n', ...
-                      '计算策略：%s\n', ...
-                      '炮号：%d\n', ...
-                      '合成数据：%s'], ...
-                      selected_mode, shot_number, syn_path);
-        disp(msg);
-        
-        % 这里调用实际的计算函数
-        % forward_wavefield = your_compute_function(syn_path, shot_number, selected_mode);
-        
-        % 计算完成提示
-        msgbox('单炮正演计算完成', '计算成功');
-        
-    catch ME
-        % 错误处理
-        errordlg(['计算失败：' ME.message], '错误');
-        disp(['错误详情：' getReport(ME)]);
-    end
-end
-
 % 单炮伴随波场计算回调函数
 function calculate_adjoint(src, ~)
     try
@@ -324,11 +278,72 @@ function calculate_adjoint(src, ~)
                       selected_mode, shot_number, obs_path, syn_path);
         disp(msg);
         
-        % 这里调用实际的计算函数
-        % adjoint_wavefield = your_compute_function(obs_path, syn_path, shot_number, selected_mode);
+        % 读取JSON并设置参数
+        obs_params = jsondecode(fileread(obs_path));
+        syn_params = jsondecode(fileread(syn_path));
+        
+        % 设置计算参数
+        params = syn_params;  % 使用合成数据的参数作为基础
+        params.compute_kernel = selected_mode;
+        params.current_shot = shot_number;
+        params.obs_data = obs_params;  % 添加观测数据参数
+        
+        % 执行伴随波场计算
+        adjoint_modeling(params);
         
         % 计算完成提示
         msgbox('单炮伴随波场计算完成', '计算成功');
+        
+    catch ME
+        % 错误处理
+        errordlg(['计算失败：' ME.message], '错误');
+        disp(['错误详情：' getReport(ME)]);
+    end
+end
+
+% 单炮正演计算回调函数
+function calculate_forward(src, ~)
+    try
+        % 获取主窗口句柄
+        fig = ancestor(src, 'figure');
+        
+        % 获取计算参数
+        compute_mode_obj = findobj(fig, 'Tag', 'compute_mode');
+        compute_modes = get(compute_mode_obj, 'String');
+        selected_mode = compute_modes{get(compute_mode_obj, 'Value')};
+        
+        shot_number = str2double(get(findobj(fig, 'Tag', 'shot_number'), 'String'));
+        
+        % 获取JSON文件路径
+        syn_path = get(findobj(fig, 'Tag', 'syn_edit'), 'String');
+        
+        % 检查参数有效性
+        if isempty(syn_path)
+            error('请先选择合成数据JSON文件');
+        end
+        
+        if isnan(shot_number) || shot_number < 1
+            error('请输入有效的炮号');
+        end
+        
+        % 显示计算信息
+        msg = sprintf(['开始计算单炮正演：\n', ...
+                      '计算策略：%s\n', ...
+                      '炮号：%d\n', ...
+                      '合成数据：%s'], ...
+                      selected_mode, shot_number, syn_path);
+        disp(msg);
+        
+        % 读取JSON并设置参数
+        params = jsondecode(fileread(syn_path));
+        params.compute_kernel = selected_mode;
+        params.current_shot = shot_number;
+        
+        % 执行正演计算
+        forward_modeling(params);
+        
+        % 计算完成提示
+        msgbox('单炮正演计算完成', '计算成功');
         
     catch ME
         % 错误处理
@@ -372,8 +387,18 @@ function calculate_gradient(src, ~)
                       selected_mode, shot_number, obs_path, syn_path);
         disp(msg);
         
-        % 这里调用实际的计算函数
-        % gradient = your_compute_function(obs_path, syn_path, shot_number, selected_mode);
+        % 读取JSON并设置参数
+        obs_params = jsondecode(fileread(obs_path));
+        syn_params = jsondecode(fileread(syn_path));
+        
+        % 设置计算参数
+        params = syn_params;  % 使用合成数据的参数作为基础
+        params.compute_kernel = selected_mode;
+        params.current_shot = shot_number;
+        params.obs_data = obs_params;  % 添加观测数据参数
+        
+        % 执行梯度计算
+        gradient_computation(params);
         
         % 计算完成提示
         msgbox('单炮梯度计算完成', '计算成功');
