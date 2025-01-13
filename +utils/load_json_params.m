@@ -41,21 +41,16 @@ function params = load_json_params(json_file)
     end
     
     % 读取JSON文件
-    try
-        fid = fopen(json_file, 'r');
-        if fid == -1
-            error('无法打开JSON文件: %s', json_file);
-        end
-        raw = fread(fid, inf);
-        str = char(raw');
-        fclose(fid);
-        params = jsondecode(str);
-    catch ME
-        if exist('fid', 'var') && fid ~= -1
-            fclose(fid);
-        end
-        error('读取JSON文件失败: %s', ME.message);
-    end
+    fid = fopen(json_file, 'r');
+    raw = fread(fid, inf);
+    str = char(raw');
+    fclose(fid);
+    
+    % 解析JSON
+    params = jsondecode(str);
+    
+    % 保存JSON文件路径，用于后续相对路径处理
+    params.json_file = json_file;
     
     % 验证必要参数
     required_fields = {'NX', 'NY', 'DELTAX', 'DELTAY', 'NSTEP', 'DELTAT', ...
