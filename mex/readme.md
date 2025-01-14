@@ -26,14 +26,23 @@ mex compute_wave_propagation.cpp
 ## 3. OpenMP 并行版本
 使用 OpenMP 进行 CPU 多线程并行：
 
-mex compute_wave_propagation_omp.cpp COMPFLAGS="/openmp $COMPFLAGS"
+mex COMPFLAGS="$COMPFLAGS /openmp" OPTIMFLAGS="/O2" compute_wave_propagation_omp.cpp
 
 - 输出文件：
   - Windows: `compute_wave_propagation_omp.mexw64`
 
 
 
-## 4. GCD 并行版本
+## 4. SIMD 并行版本
+使用 SIMD 进行 CPU 多线程并行：
+mex COMPFLAGS="$COMPFLAGS /openmp /arch:AVX2" core/VTI_WaveFieldSolver_SIMD.cpp
+
+- 输出文件：
+  - Windows: `compute_wave_propagation_simd.mexw64`
+
+
+
+## 5. GCD 并行版本
 使用 Apple 的 Grand Central Dispatch 进行并行计算：
 
 mex -v -O -largeArrayDims LDFLAGS='\$LDFLAGS -framework Foundation -framework CoreFoundation' compute_wave_propagation_gcd.cpp
