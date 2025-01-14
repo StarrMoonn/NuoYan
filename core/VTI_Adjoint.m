@@ -63,6 +63,18 @@ classdef VTI_Adjoint < handle
         % 当前炮的数据
         current_residuals_vx    % 当前炮的速度场x分量残差
         current_residuals_vy    % 当前炮的速度场y分量残差
+        
+        % 添加内存映射相关属性
+        temp_file_syn_vx    % 合成波场vx分量临时文件路径
+        temp_file_syn_vy    % 合成波场vy分量临时文件路径
+        syn_wavefield_map_vx % 合成波场vx分量的内存映射
+        syn_wavefield_map_vy % 合成波场vy分量的内存映射
+        
+        % 添加伴随波场内存映射相关属性
+        temp_file_adj_vx    % 伴随波场vx分量临时文件路径
+        temp_file_adj_vy    % 伴随波场vy分量临时文件路径
+        adj_wavefield_map_vx % 伴随波场vx分量的内存映射
+        adj_wavefield_map_vy % 伴随波场vy分量的内存映射
     end
     
     methods
@@ -99,21 +111,84 @@ classdef VTI_Adjoint < handle
             obj.adjoint_output_dir = fullfile(current_dir, 'data', 'output', 'wavefield', 'adjoint');
         end
         
-      
+        % 初始化波场存储
+        function setup_wavefield_storage(obj)
+            % 创建临时文件
+            obj.temp_file_syn_vx = tempname;
+            obj.temp_file_syn_vy = tempname;
+            
+            % 分配文件空间
+            nx = obj.syn_params.NX;
+            ny = obj.syn_params.NY;
+            
+            % 为合成波场vx分量创建内存映射
+            fid = fopen(obj.temp_file_syn_vx, 'w');
+            fwrite(fid, zeros(nx * ny * obj.NSTEP, 1), 'double');
+            fclose(fid);
+            obj.syn_wavefield_map_vx = memmapfile(obj.temp_file_syn_vx, ...
+                'Format', {'double', [nx, ny, obj.NSTEP], 'data'}, ...
+                'Writable', true);
+                
+            % 为合成波场vy分量创建内存映射
+            fid = fopen(obj.temp_file_syn_vy, 'w');
+            fwrite(fid, zeros(nx * ny * obj.NSTEP, 1), 'double');
+            fclose(fid);
+            obj.syn_wavefield_map_vy = memmapfile(obj.temp_file_syn_vy, ...
+                'Format', {'double', [nx, ny, obj.NSTEP], 'data'}, ...
+                'Writable', true);
+        end
         
+        % 新增伴随波场存储初始化函数
+        function setup_adjoint_wavefield_storage(obj)
+            obj.temp_file_adj_vx = tempname;
+            obj.temp_file_adj_vy = tempname;
+            
+            nx = obj.syn_params.NX;
+            ny = obj.syn_params.NY;
+            
+            % 为伴随波场vx分量创建内存映射
+            fid = fopen(obj.temp_file_adj_vx, 'w');
+            fwrite(fid, zeros(nx * ny * obj.NSTEP, 1), 'double');
+            fclose(fid);
+            obj.adj_wavefield_map_vx = memmapfile(obj.temp_file_adj_vx, ...
+                'Format', {'double', [nx, ny, obj.NSTEP], 'data'}, ...
+                'Writable', true);
+            
+            % 为伴随波场vy分量创建内存映射
+            fid = fopen(obj.temp_file_adj_vy, 'w');
+            fwrite(fid, zeros(nx * ny * obj.NSTEP, 1), 'double');
+            fclose(fid);
+            obj.adj_wavefield_map_vy = memmapfile(obj.temp_file_adj_vy, ...
+                'Format', {'double', [nx, ny, obj.NSTEP], 'data'}, ...
+                'Writable', true);
+        end
+
         % 2. 计算单炮残差
         function compute_residuals_single_shot(obj, ishot)
+            % 初始化内存映射
+            obj.setup_wavefield_storage();
+            
             % 计算单炮的观测数据和合成数据
             fprintf('\n=== 计算第 %d 炮的残差 ===\n', ishot);
             
+            % 1. 计算观测波场（只返回检波器位置的数据）
             [obs_vx, obs_vy, ~] = obj.wavefield_solver_obs.forward_modeling_single_shot(ishot);
-            [syn_vx, syn_vy, ~] = obj.wavefield_solver_syn.forward_modeling_single_shot(ishot);
             
-            % 计算残差
+            % 2. 计算合成波场（需要完整波场用于梯度计算）
+            [syn_vx, syn_vy, syn_wavefield] = obj.wavefield_solver_syn.forward_modeling_single_shot(ishot);
+            
+            % 3. 将完整波场复制到内存映射
+            obj.syn_wavefield_map_vx.Data.data = syn_wavefield.vx;
+            obj.syn_wavefield_map_vy.Data.data = syn_wavefield.vy;
+            
+            % 4. 计算残差
             obj.current_residuals_vx = obs_vx - syn_vx;
             obj.current_residuals_vy = obs_vy - syn_vy;
             
-            % 修正：输出单炮的残差值
+            % 5. 清理运行内存中的所有临时数据
+            clear obs_vx obs_vy syn_vx syn_vy syn_wavefield
+            
+            % 输出残差统计信息
             fprintf('残差 vx 最大值: %e\n', max(abs(obj.current_residuals_vx(:))));
             fprintf('残差 vy 最大值: %e\n\n', max(abs(obj.current_residuals_vy(:))));
             
@@ -144,11 +219,9 @@ classdef VTI_Adjoint < handle
             % 重置波场
             wave_solver.reset_fields();
             
-            % 初始化存储完整时间历史的结构体
-            adjoint_wavefield = struct(...
-                'vx', zeros(wave_solver.NX, wave_solver.NY, obj.NSTEP), ...
-                'vy', zeros(wave_solver.NX, wave_solver.NY, obj.NSTEP));
-            
+            % 初始化伴随波场的内存映射
+            obj.setup_adjoint_wavefield_storage();
+
             % 时间反传
             fprintf('\n=== 开始伴随波场时间反传 ===\n');
             for it = obj.NSTEP:-1:1
@@ -166,16 +239,23 @@ classdef VTI_Adjoint < handle
                 % 应用边界条件
                 wave_solver.apply_boundary_conditions();
                 
-                % 保存当前时间步的波场
-                % 注意：由于是时间反传，我们需要正确映射时间索引
+                % 将波场存储到内存映射
                 time_index = obj.NSTEP - it + 1;  % 将反向时间映射到正向索引
-                adjoint_wavefield.vx(:,:,time_index) = wave_solver.vx;
-                adjoint_wavefield.vy(:,:,time_index) = wave_solver.vy;
+                obj.adj_wavefield_map_vx.Data.data(:,:,time_index) = wave_solver.vx;
+                obj.adj_wavefield_map_vy.Data.data(:,:,time_index) = wave_solver.vy;
+                
+                % 清理当前时间步的波场（因为已经保存到内存映射）
+                wave_solver.reset_fields();
                 
                 % 保存波场快照（如果需要的话）
                 obj.save_adjoint_snapshot(wave_solver, ishot, it);
             end
             fprintf('伴随波场计算完成！\n\n');
+            
+            % 在函数末尾添加返回值
+            adjoint_wavefield = struct(...
+                'vx', obj.adj_wavefield_map_vx.Data.data, ...
+                'vy', obj.adj_wavefield_map_vy.Data.data);
         end
         
         % 4. 添加伴随源
@@ -212,6 +292,23 @@ classdef VTI_Adjoint < handle
             save(save_path, 'vx_data', 'vy_data', '-v7.3');
             
             fprintf('保存伴随波场快照: 炮号 %d, 时间步 %d\n', ishot, it);
+        end
+        
+        % 在析构函数中清理临时文件
+        function delete(obj)
+            % 删除临时文件
+            if isfield(obj, 'temp_file_syn_vx') && exist(obj.temp_file_syn_vx, 'file')
+                delete(obj.temp_file_syn_vx);
+            end
+            if isfield(obj, 'temp_file_syn_vy') && exist(obj.temp_file_syn_vy, 'file')
+                delete(obj.temp_file_syn_vy);
+            end
+            if isfield(obj, 'temp_file_adj_vx') && exist(obj.temp_file_adj_vx, 'file')
+                delete(obj.temp_file_adj_vx);
+            end
+            if isfield(obj, 'temp_file_adj_vy') && exist(obj.temp_file_adj_vy, 'file')
+                delete(obj.temp_file_adj_vy);
+            end
         end
     end
 end 

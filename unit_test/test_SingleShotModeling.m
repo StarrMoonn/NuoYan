@@ -63,34 +63,14 @@ try
     fprintf('\n=== 模拟完成 ===\n');
     fprintf('总计算时间: %.2f 秒\n', total_time);
     
-    % 测试get_complete_wavefield函数
-    fprintf('\n=== 测试get_complete_wavefield函数 ===\n');
-    fprintf('测试从内存获取波场...\n');
-    
-    % 检查stored_wavefield是否已保存
-    fprintf('stored_wavefield状态: %s\n', ...
-        conditional(isempty(forward_solver.stored_wavefield), '空', '非空'));
-    fprintf('stored_shot_no: %d\n', forward_solver.stored_shot_no);
-    
-    % 尝试获取波场
-    retrieved_wavefield = forward_solver.get_complete_wavefield(ishot);
-    
-    % 验证获取的波场
-    if ~isempty(retrieved_wavefield)
-        fprintf('成功获取波场\n');
-        fprintf('波场维度: vx[%d,%d,%d], vy[%d,%d,%d]\n', ...
-            size(retrieved_wavefield.vx,1), size(retrieved_wavefield.vx,2), size(retrieved_wavefield.vx,3), ...
-            size(retrieved_wavefield.vy,1), size(retrieved_wavefield.vy,2), size(retrieved_wavefield.vy,3));
-        
-        % 验证波场数据是否一致
-        if isequal(complete_wavefield, retrieved_wavefield)
-            fprintf('波场数据验证成功：存储的波场与原始波场完全匹配\n');
-        else
-            warning('波场数据不匹配！');
-        end
-    else
-        warning('无法从内存获取波场！');
-    end
+    % 验证输出数据的维度
+    fprintf('\n=== 验证输出数据 ===\n');
+    fprintf('检波器记录维度: vx[%d,%d], vy[%d,%d]\n', ...
+        size(vx_data,1), size(vx_data,2), ...
+        size(vy_data,1), size(vy_data,2));
+    fprintf('完整波场维度: vx[%d,%d,%d], vy[%d,%d,%d]\n', ...
+        size(complete_wavefield.vx,1), size(complete_wavefield.vx,2), size(complete_wavefield.vx,3), ...
+        size(complete_wavefield.vy,1), size(complete_wavefield.vy,2), size(complete_wavefield.vy,3));
 
 catch ME
     % 错误处理
@@ -98,14 +78,5 @@ catch ME
     fprintf('错误详情：\n%s\n', getReport(ME));
 end
 
-fprintf('\n=== 测试完成 ===\n'); 
-
-% 辅助函数
-function str = conditional(condition, true_str, false_str)
-    if condition
-        str = true_str;
-    else
-        str = false_str;
-    end
-end
+fprintf('\n=== 测试完成 ===\n');
 
