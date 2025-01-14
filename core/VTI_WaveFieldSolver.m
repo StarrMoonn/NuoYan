@@ -818,7 +818,7 @@ classdef VTI_WaveFieldSolver < handle
             NX = obj.NX;
             NY = obj.NY;
 
-            % Call the GPU MEX file
+            % 调用编译好的 MEX 文件
             %[vx, vy] =  VTI_WaveFieldSolver_SIMD
             %[vx, vy] = compute_wave_propagation_gcd
             [vx, vy] =  compute_wave_propagation_omp(vx, vy, sigmaxx, sigmayy, sigmaxy, ...
@@ -830,7 +830,7 @@ classdef VTI_WaveFieldSolver < handle
                 K_x, K_y, K_x_half, K_y_half, ...
                 DELTAX, DELTAY, DELTAT, NX, NY);
 
-            % Update only velocity fields
+            % 将 MEX 输出结果赋值给类成员变量
             obj.vx = vx;
             obj.vy = vy;
         end

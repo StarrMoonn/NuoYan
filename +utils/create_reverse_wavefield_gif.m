@@ -1,5 +1,19 @@
 function create_reverse_wavefield_gif(input_dir, output_filename, delay_time)
-    % 获取所有PNG文件
+    %% 创建反向波场GIF
+    % 功能：将指定目录下的PNG图像反向合成GIF动画
+    %
+    % 输入：
+    %   - input_dir: 包含PNG图像的输入目录
+    %   - output_filename: 输出GIF文件名
+    %   - delay_time: 每帧之间的延迟时间（秒）
+    %
+    % 输出：
+    %   - 无（直接生成GIF文件）
+    %
+    % 作者：StarrMoonn
+    % 日期：2025-01-14
+    %
+
     files = dir(fullfile(input_dir, '*.png'));
     fprintf('找到 %d 个PNG文件\n', length(files));
     
