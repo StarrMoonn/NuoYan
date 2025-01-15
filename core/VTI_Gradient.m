@@ -79,8 +79,8 @@ classdef VTI_Gradient < handle
             % 计算伴随波场
             adjoint_wavefield = obj.adjoint_solver.compute_adjoint_wavefield_single_shot(ishot);
             
-            % 从伴随求解器获取正演波场
-            forward_wavefield = obj.adjoint_solver.wavefield_solver_syn.get_complete_wavefield(ishot);
+            % 直接使用已经计算好的正演波场
+            forward_wavefield = obj.adjoint_solver.current_forward_wavefield;
             
             % 计算互相关得到梯度
             gradient = obj.correlate_wavefields(forward_wavefield, adjoint_wavefield);
@@ -106,7 +106,7 @@ classdef VTI_Gradient < handle
             
             % 对每个时间步进行互相关
             for it = 1:size(forward_wavefield.vx, 3)
-                % 直接使用波场，不需要转置
+                % 从完整波场中读取当前时间步的波场
                 fwd_vx = forward_wavefield.vx(:,:,it);
                 fwd_vy = forward_wavefield.vy(:,:,it);
                 adj_vx = adjoint_wavefield.vx(:,:,it);

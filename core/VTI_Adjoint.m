@@ -63,6 +63,7 @@ classdef VTI_Adjoint < handle
         % 当前炮的数据
         current_residuals_vx    % 当前炮的速度场x分量残差
         current_residuals_vy    % 当前炮的速度场y分量残差
+        current_forward_wavefield  % 添加属性存储当前炮的正演波场
     end
     
     methods
@@ -108,6 +109,9 @@ classdef VTI_Adjoint < handle
             
             [obs_vx, obs_vy, ~] = obj.wavefield_solver_obs.forward_modeling_single_shot(ishot);
             [syn_vx, syn_vy, syn_wavefield] = obj.wavefield_solver_syn.forward_modeling_single_shot(ishot);
+            
+            % 保存正演波场供后续使用
+            obj.current_forward_wavefield = syn_wavefield;
             
             % 计算残差
             obj.current_residuals_vx = obs_vx - syn_vx;
