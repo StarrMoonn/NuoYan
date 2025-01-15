@@ -94,7 +94,7 @@ classdef VTI_Adjoint < handle
             obj.save_adjoint_snapshots = true;
             obj.snapshot_interval = 100;
             
-            % 设置输出目录（与VTI_WaveFieldSolver保持一致的结构）
+            % 设置输出目录
             current_dir = fileparts(fileparts(mfilename('fullpath')));
             obj.adjoint_output_dir = fullfile(current_dir, 'data', 'output', 'wavefield', 'adjoint');
         end
@@ -107,13 +107,13 @@ classdef VTI_Adjoint < handle
             fprintf('\n=== 计算第 %d 炮的残差 ===\n', ishot);
             
             [obs_vx, obs_vy, ~] = obj.wavefield_solver_obs.forward_modeling_single_shot(ishot);
-            [syn_vx, syn_vy, ~] = obj.wavefield_solver_syn.forward_modeling_single_shot(ishot);
+            [syn_vx, syn_vy, syn_wavefield] = obj.wavefield_solver_syn.forward_modeling_single_shot(ishot);
             
             % 计算残差
             obj.current_residuals_vx = obs_vx - syn_vx;
             obj.current_residuals_vy = obs_vy - syn_vy;
             
-            % 修正：输出单炮的残差值
+            % 输出单炮的残差值
             fprintf('残差 vx 最大值: %e\n', max(abs(obj.current_residuals_vx(:))));
             fprintf('残差 vy 最大值: %e\n\n', max(abs(obj.current_residuals_vy(:))));
             
@@ -167,7 +167,6 @@ classdef VTI_Adjoint < handle
                 wave_solver.apply_boundary_conditions();
                 
                 % 保存当前时间步的波场
-                % 注意：由于是时间反传，我们需要正确映射时间索引
                 time_index = obj.NSTEP - it + 1;  % 将反向时间映射到正向索引
                 adjoint_wavefield.vx(:,:,time_index) = wave_solver.vx;
                 adjoint_wavefield.vy(:,:,time_index) = wave_solver.vy;
@@ -185,7 +184,7 @@ classdef VTI_Adjoint < handle
                 i = fd_solver.rec_x(irec);
                 j = fd_solver.rec_y(irec);
                 
-                % 不需要*dt，波动方程算子以及有dt
+                % 不需要*dt，波动方程算子已经有dt
                 fd_solver.vx(i,j) = residuals_vx(it, irec);
                 fd_solver.vy(i,j) = residuals_vy(it, irec);
             end

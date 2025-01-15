@@ -60,7 +60,7 @@
     "// 输出控制参数": null,
     "IT_DISPLAY": 100,
     "save_snapshots": false,
-    "compute_mode": "cpu_parallel",
+    "compute_mode": "openMP",
 
     "adjoint_params": {
         "save_adjoint_snapshots": true,

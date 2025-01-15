@@ -9,9 +9,18 @@
 clc;
 clear;
 
+% 获取当前脚本的路径
+[script_path, ~, ~] = fileparts(mfilename('fullpath'));
+
+% 设置项目根目录为当前脚本的上级目录
+project_root = fileparts(script_path);
+
+% 添加项目根目录到路径
+addpath(project_root);
+
 % 设置路径
-png_dir = 'E:\Matlab\VTI_project\data\output\images\adjoint\shot_001\vx';  % PNG文件目录
-output_dir = 'E:\Matlab\VTI_project\data\output\images\adjoint\shot_001\gif';  % GIF输出目录
+png_dir = fullfile(project_root, 'data', 'output', 'images', 'adjoint', 'shot_001', 'vx');  % PNG文件目录
+output_dir = fullfile(project_root, 'data', 'output', 'images', 'adjoint', 'shot_001', 'gif');  % GIF输出目录
 
 % 创建输出目录
 if ~exist(output_dir, 'dir')

@@ -22,14 +22,25 @@
 % 作者：StarrMoonn
 % 日期：2025-01-08
 %
+clear;
+clc;
 
-% 设置路径
-json_path = 'E:\Matlab\VTI_project\data\params\case3\params_syn.json';  % JSON文件路径
-data_path = 'E:\Matlab\VTI_project\data\output\wavefield\adjoint\shot_001';     % 伴随波场数据所在文件夹
+% 获取当前脚本的路径
+[script_path, ~, ~] = fileparts(mfilename('fullpath'));
+
+% 设置项目根目录为当前脚本的上级目录
+project_root = fileparts(script_path);
+
+% 添加项目根目录到路径
+addpath(project_root);
+
+% 使用相对路径指定JSON文件路径
+json_file = fullfile(project_root, 'data', 'params', 'case3', 'params_syn.json');
+data_path = fullfile(project_root, 'data', 'output', 'wavefield', 'adjoint', 'shot_001');
 
 % 为vx和vy分别创建输出目录
-output_dir_vx = 'E:\Matlab\VTI_project\data\output\images\adjoint\shot_001\vx';    % vx分量输出文件夹
-output_dir_vy = 'E:\Matlab\VTI_project\data\output\images\adjoint\shot_001\vy';    % vy分量输出文件夹
+output_dir_vx = fullfile(project_root, 'data', 'output', 'images', 'adjoint', 'shot_001', 'vx');    
+output_dir_vy = fullfile(project_root, 'data', 'output', 'images', 'adjoint', 'shot_001', 'vy'); 
 
 % 确保输出目录存在
 if ~exist(output_dir_vx, 'dir')
@@ -40,7 +51,7 @@ if ~exist(output_dir_vy, 'dir')
 end
 
 % 读取JSON文件以检查检波器位置
-params = jsondecode(fileread(json_path));
+params = jsondecode(fileread(json_file));
 
 % 打印检波器参数
 fprintf('\n=== 检波器参数 ===\n');
@@ -58,7 +69,7 @@ end
 
 % 调用绘图函数，分别处理vx和vy
 % 处理vx分量
-utils.plot_adjoint_snapshots(json_path, data_path, output_dir_vx, 'vx'); 
+utils.plot_adjoint_snapshots(json_file, data_path, output_dir_vx, 'vx'); 
 
 % 处理vy分量
-utils.plot_adjoint_snapshots(json_path, data_path, output_dir_vy, 'vy'); 
+utils.plot_adjoint_snapshots(json_file, data_path, output_dir_vy, 'vy'); 
