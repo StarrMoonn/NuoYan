@@ -596,8 +596,8 @@ classdef VTI_WaveFieldSolver < handle
                     obj.compute_wave_propagation_cpu1();  % 遍历 CPU实现
                 case 'cpu_mex'
                     obj.compute_wave_propagation_cpu2();  % C++ CPU实现
-                case 'cuda_mex'
-                    obj.compute_wave_propagation_gpu();   % CUDA GPU实现
+                case 'openMP'
+                    obj.compute_wave_propagation_cpu3();  % GCD 并行实现
                 otherwise
                     error('Unknown compute kernel type: %s', obj.compute_kernel);
             end
@@ -767,7 +767,7 @@ classdef VTI_WaveFieldSolver < handle
             obj.vy = vy;
         end
         
-        function compute_wave_propagation_gpu(obj)
+        function compute_wave_propagation_cpu3(obj)
             % Similar to compute_wave_propagation_cpu2 but using GPU version
             dx = obj.DELTAX;
             dy = obj.DELTAY;
@@ -818,7 +818,7 @@ classdef VTI_WaveFieldSolver < handle
             NX = obj.NX;
             NY = obj.NY;
 
-            % Call the GPU MEX file
+            % 调用编译好的 MEX 文件
             [vx, vy] =  compute_wave_propagation_gcd(vx, vy, sigmaxx, sigmayy, sigmaxy, ...
                 memory_dvx_dx, memory_dvy_dy, memory_dvy_dx, memory_dvx_dy, ...
                 memory_dsigmaxx_dx, memory_dsigmaxy_dy, memory_dsigmaxy_dx, memory_dsigmayy_dy, ...
@@ -828,7 +828,7 @@ classdef VTI_WaveFieldSolver < handle
                 K_x, K_y, K_x_half, K_y_half, ...
                 DELTAX, DELTAY, DELTAT, NX, NY);
 
-            % Update only velocity fields
+            % 将 MEX 输出结果赋值给类成员变量
             obj.vx = vx;
             obj.vy = vy;
         end
