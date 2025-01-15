@@ -96,15 +96,6 @@ classdef VTI_SingleShotModeling < handle
         % 输出目录设置
         output_dir       % 基础输出目录
         seismogram_dir   % 地震记录目录
-        wavefield_dir    % 完整波场目录
-        
-        % 波场存储模式
-        % 可选值：
-        %   - 'memory': 将完整波场保存在内存中（默认）
-        %   - 'disk': 将完整波场保存到硬盘，节省内存
-        wavefield_storage_mode   % 波场存储模式
-        stored_wavefield         % 新增：用于存储波场的属性
-        stored_shot_no           % 新增：记录存储的是哪一炮
     end
     
     methods
@@ -129,31 +120,15 @@ classdef VTI_SingleShotModeling < handle
             obj.NREC = params.NREC;
             obj.DELTAT = params.DELTAT;
             
-            % 设置波场存储模式
-            if isfield(params, 'wavefield_storage_mode')
-                % 如果在params中指定了存储模式，则使用指定的模式
-                obj.wavefield_storage_mode = params.wavefield_storage_mode;
-            else
-                % 否则默认使用内存存储模式
-                obj.wavefield_storage_mode = 'memory';
-            end
-            
-            % 设置各种输出目录
+            % 设置输出目录
             current_dir = fileparts(fileparts(mfilename('fullpath')));
             obj.output_dir = fullfile(current_dir, 'data', 'output', 'wavefield');
             obj.seismogram_dir = fullfile(obj.output_dir, 'seismograms');
-            obj.wavefield_dir = fullfile(obj.output_dir, 'complete_wavefields');
             
-            % 如果使用磁盘存储模式，确保波场目录存在
-            if strcmp(obj.wavefield_storage_mode, 'disk') && ~exist(obj.wavefield_dir, 'dir')
-                mkdir(obj.wavefield_dir);
+            % 确保地震记录目录存在
+            if ~exist(obj.seismogram_dir, 'dir')
+                mkdir(obj.seismogram_dir);
             end
-            
-            
-            
-            % 输出当前配置信息
-            fprintf('初始化VTI_SingleShotModeling:\n');
-            fprintf('- 波场存储模式: %s\n', obj.wavefield_storage_mode);
         end
         
         function [vx_data, vy_data, complete_wavefield] = forward_modeling_single_shot(obj, ishot)
@@ -198,18 +173,13 @@ classdef VTI_SingleShotModeling < handle
                 % 应用边界条件
                 obj.fd_solver.apply_boundary_conditions();
                 
-                % 记录检波器数据
-                obj.fd_solver.record_seismograms(it);
-                
-                % 提取检波器位置当前时间步的波场值
+                % 记录检波器数据和完整波场
                 vx_data(it,:) = obj.fd_solver.vx(indices);
                 vy_data(it,:) = obj.fd_solver.vy(indices);
-                
-                % 保存波场时确保坐标系正确
-                complete_wavefield.vx(:,:,it) = obj.fd_solver.vx;  
+                complete_wavefield.vx(:,:,it) = obj.fd_solver.vx;
                 complete_wavefield.vy(:,:,it) = obj.fd_solver.vy;
                 
-                % 输出信息和保存快照
+                % 输出进度信息
                 if mod(it, 100) == 0
                     obj.fd_solver.output_info(it);
                 end
@@ -223,45 +193,16 @@ classdef VTI_SingleShotModeling < handle
             % 保存地震记录
             seismic_file = fullfile(obj.seismogram_dir, sprintf('shot_%03d_seismogram.mat', ishot));
             save(seismic_file, 'vx_data', 'vy_data', '-v7.3');
-            
-            % 根据存储策略处理完整波场
-            switch obj.wavefield_storage_mode
-                case 'memory'
-                    % 当前方式：保持在内存中
-                    
-                case 'disk'
-                    % 保存到硬盘并清空内存
-                    wavefield_file = fullfile(obj.wavefield_dir, ...
-                        sprintf('shot_%03d_complete_wavefield.mat', ishot));
-                    save(wavefield_file, 'complete_wavefield', '-v7.3');
-                    complete_wavefield = [];  % 清空内存
-            end
-            
-            % 在计算完成后，保存到类的属性中
-            obj.stored_wavefield = complete_wavefield;
-            obj.stored_shot_no = ishot;
         end
         
         function set_source_position(obj, ishot)
             % 设置震源位置
-            % 根据炮号计算震源位置
             obj.fd_solver.ISOURCE = obj.first_shot_i + (ishot-1) * obj.shot_di;
             obj.fd_solver.JSOURCE = obj.first_shot_j + (ishot-1) * obj.shot_dj;
             
             % 更新震源物理坐标
             obj.fd_solver.xsource = (obj.fd_solver.ISOURCE - 1) * obj.fd_solver.DELTAX;
             obj.fd_solver.ysource = (obj.fd_solver.JSOURCE - 1) * obj.fd_solver.DELTAY;
-        end
-        
-        function wavefield = get_complete_wavefield(obj, ishot)
-            % 先检查是否已经存储了这一炮的波场
-            if ~isempty(obj.stored_wavefield) && obj.stored_shot_no == ishot
-                wavefield = obj.stored_wavefield;
-                return;
-            end
-            
-            % 如果没有存储，才重新计算
-            [~, ~, wavefield] = obj.forward_modeling_single_shot(ishot);
         end
     end
 end 
