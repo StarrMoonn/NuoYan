@@ -76,6 +76,9 @@ classdef VTI_Gradient < handle
         
         % 计算单炮梯度
         function gradient = compute_single_shot_gradient(obj, ishot)
+            fprintf('\n=== 开始计算第 %d 炮梯度 ===\n', ishot);
+            tic;  % 开始计时
+
             % 计算伴随波场
             adjoint_wavefield = obj.adjoint_solver.compute_adjoint_wavefield_single_shot(ishot);
             
@@ -84,6 +87,15 @@ classdef VTI_Gradient < handle
             
             % 计算互相关得到梯度
             gradient = obj.correlate_wavefields(forward_wavefield, adjoint_wavefield);
+
+            % 保存单炮梯度到磁盘
+            obj.save_gradient(gradient, ishot);
+                        
+            % 输出计算完成信息
+            fprintf('\n=== 炮号 %d 梯度计算完成 ===\n', ishot);
+            
+            computation_time = toc;
+            fprintf('第 %d 炮梯度计算耗时: %.2f 秒\n', ishot, computation_time);
         end
         
         % 波场互相关
@@ -157,13 +169,24 @@ classdef VTI_Gradient < handle
         end
         
         function save_gradient(obj, gradient, ishot)
-            % 验证梯度维度
-            [nx_c11, ny_c11] = size(gradient.c11);
-            fprintf('\n=== 梯度维度检查 ===\n');
-            fprintf('C11梯度维度: [%d, %d]\n', nx_c11, ny_c11);
-            if nx_c11 ~= 801 || ny_c11 ~= 201
-                warning('梯度维度不符合预期 [801, 201]！');
+            % 验证输入
+            if ~isstruct(gradient) || ~all(isfield(gradient, {'c11','c13','c33','c44','rho'}))
+                error('梯度必须包含所有必要字段：c11, c13, c33, c44, rho');
             end
+            
+            % 验证所有分量维度一致性
+            [nx_c11, ny_c11] = size(gradient.c11);
+            fields = {'c13', 'c33', 'c44', 'rho'};
+            for field = fields
+                [nx, ny] = size(gradient.(field{1}));
+                if nx ~= nx_c11 || ny ~= ny_c11
+                    error('梯度分量维度不一致：%s [%d, %d] vs c11 [%d, %d]', ...
+                          field{1}, nx, ny, nx_c11, ny_c11);
+                end
+            end
+            
+            fprintf('\n=== 梯度维度检查 ===\n');
+            fprintf('梯度维度: [%d, %d]\n', nx_c11, ny_c11);
             
             % 构造文件名
             filename = sprintf('gradient_shot_%d.mat', ishot);
