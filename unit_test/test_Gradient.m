@@ -49,11 +49,7 @@ clc;
 try
     % 获取当前脚本的路径
     [script_path, ~, ~] = fileparts(mfilename('fullpath'));
-    
-    % 设置项目根目录为当前脚本的上级目录
     project_root = fileparts(script_path);
-    
-    % 添加项目根目录到路径
     addpath(project_root);
      
     % 使用相对路径指定两个JSON文件路径
@@ -99,17 +95,6 @@ try
     
     % 计算梯度
     gradient = gradient_solver.compute_single_shot_gradient(ishot);
-    
-    % 构造保存路径
-    output_dir = fullfile(project_root, 'data', 'output', 'gradient');
-    if ~exist(output_dir, 'dir')
-        mkdir(output_dir);
-    end
-    filepath = fullfile(output_dir, sprintf('gradient_shot_%d.mat', ishot));
-    
-    % 保存梯度
-    save(filepath, 'gradient');
-    fprintf('梯度已保存到: %s\n', filepath);
     
     % 验证梯度结果
     fprintf('\n=== 验证梯度结果 ===\n');
@@ -227,8 +212,8 @@ try
     fprintf('C11最大梯度位置: (%d, %d)\n', max_x_c11, max_z_c11);
     
 catch ME
-    fprintf('绘图出错: %s\n', ME.message);
-    fprintf('错误位置: %s\n', ME.stack(1).name);
+    fprintf('\n错误: %s\n', ME.message);
+    rethrow(ME);
 end
      
 
