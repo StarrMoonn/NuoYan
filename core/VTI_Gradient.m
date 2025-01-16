@@ -119,25 +119,33 @@ classdef VTI_Gradient < handle
             dt = obj.adjoint_solver.syn_params.DELTAT;
             
             % 初始化梯度
-            [NX, NY, ~] = size(forward_wavefield.vx);
+            [NX, NY, NT] = size(forward_wavefield.vx);
             gradient_c11 = zeros(NX, NY);
             gradient_c13 = zeros(NX, NY);
             gradient_c33 = zeros(NX, NY);
             gradient_c44 = zeros(NX, NY);
             gradient_rho = zeros(NX, NY);
             
+            % 添加波场能量监控数组
+            forward_energy = zeros(NT,1);
+            adjoint_energy = zeros(NT,1);
+            
             % 添加调试信息
             fprintf('开始波场互相关计算:\n');
             fprintf('时间步长 dt = %e\n', dt);
-            fprintf('总时间步数: %d\n', size(forward_wavefield.vx, 3));
+            fprintf('总时间步数: %d\n', NT);
             
             % 对每个时间步进行互相关
-            for it = 1:size(forward_wavefield.vx, 3)
+            for it = 1:NT
                 % 从完整波场中读取当前时间步的波场
                 fwd_vx = forward_wavefield.vx(:,:,it);
                 fwd_vy = forward_wavefield.vy(:,:,it);
                 adj_vx = adjoint_wavefield.vx(:,:,it);
                 adj_vy = adjoint_wavefield.vy(:,:,it);
+                
+                % 计算波场能量
+                forward_energy(it) = sum(sum(fwd_vx.^2 + fwd_vy.^2));
+                adjoint_energy(it) = sum(sum(adj_vx.^2 + adj_vy.^2));
                 
                 % 计算应变率
                 [dvx_dx, dvx_dy] = obj.compute_gradient(fwd_vx);
@@ -145,26 +153,35 @@ classdef VTI_Gradient < handle
                 [dadj_vx_dx, dadj_vx_dy] = obj.compute_gradient(adj_vx);
                 [dadj_vy_dx, dadj_vy_dy] = obj.compute_gradient(adj_vy);
                 
-                % 更新梯度（添加dt）
+                % 更新梯度
                 gradient_c11 = gradient_c11 - dvx_dx .* dadj_vx_dx * dt;
                 gradient_c13 = gradient_c13 - (dadj_vx_dx .* dvy_dy + dadj_vy_dy .* dvx_dx + ...
                                              dadj_vx_dx .* dvy_dy + dadj_vy_dy .* dvx_dx) * dt;
                 gradient_c33 = gradient_c33 - dvy_dy .* dadj_vy_dy * dt;
                 gradient_c44 = gradient_c44 - (dvx_dy + dvy_dx) .* (dadj_vx_dy + dadj_vy_dx) * dt;
                 
-                % 密度梯度计算（使用速度场的一阶时间导数）
-                if it > 1 && it < size(forward_wavefield.vx, 3)
-                    % 计算速度场的一阶时间导数
+                % 密度梯度计算
+                if it == 1
+                    % 第一个时间步：前向差分
                     dv_dt_x = (forward_wavefield.vx(:,:,it+1) - forward_wavefield.vx(:,:,it)) / dt;
                     dv_dt_y = (forward_wavefield.vy(:,:,it+1) - forward_wavefield.vy(:,:,it)) / dt;
-                    
-                    gradient_rho = gradient_rho - (dadj_vx_dx .* dv_dt_x + ...
-                                                 dadj_vy_dy .* dv_dt_y) * dt;
+                elseif it == NT
+                    % 最后一个时间步：后向差分
+                    dv_dt_x = (forward_wavefield.vx(:,:,it) - forward_wavefield.vx(:,:,it-1)) / dt;
+                    dv_dt_y = (forward_wavefield.vy(:,:,it) - forward_wavefield.vy(:,:,it-1)) / dt;
+                else
+                    % 内部点：中心差分
+                    dv_dt_x = (forward_wavefield.vx(:,:,it+1) - forward_wavefield.vx(:,:,it-1)) / (2*dt);
+                    dv_dt_y = (forward_wavefield.vy(:,:,it+1) - forward_wavefield.vy(:,:,it-1)) / (2*dt);
                 end
                 
-                % 每100步输出一次最大梯度值（用于调试）
+                gradient_rho = gradient_rho - (dadj_ux_dx .* dv_dt_x + dadj_uy_dy .* dv_dt_y) * dt;
+                
+                % 每100步输出一次信息
                 if mod(it, 100) == 0
                     fprintf('时间步 %d:\n', it);
+                    fprintf('正演波场能量: %e\n', forward_energy(it));
+                    fprintf('伴随波场能量: %e\n', adjoint_energy(it));
                     fprintf('C11最大梯度: %e\n', max(abs(gradient_c11(:))));
                     fprintf('C13最大梯度: %e\n', max(abs(gradient_c13(:))));
                     fprintf('C33最大梯度: %e\n', max(abs(gradient_c33(:))));
@@ -172,6 +189,15 @@ classdef VTI_Gradient < handle
                     fprintf('Rho最大梯度: %e\n', max(abs(gradient_rho(:))));
                 end
             end
+            
+            % 绘制并保存波场能量曲线
+            figure;
+            plot(1:NT, forward_energy, 'b-', 1:NT, adjoint_energy, 'r--');
+            legend('正演波场能量', '伴随波场能量');
+            xlabel('时间步');
+            ylabel('波场能量');
+            title('波场能量随时间变化');
+            savefig(fullfile(obj.gradient_output_dir, 'wavefield_energy.fig'));
             
             % 组合所有参数的梯度
             gradient = struct('c11', gradient_c11, ...
