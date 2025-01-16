@@ -175,7 +175,7 @@ classdef VTI_Gradient < handle
                     dv_dt_y = (forward_wavefield.vy(:,:,it+1) - forward_wavefield.vy(:,:,it-1)) / (2*dt);
                 end
                 
-                gradient_rho = gradient_rho - (dadj_ux_dx .* dv_dt_x + dadj_uy_dy .* dv_dt_y) * dt;
+                gradient_rho = gradient_rho - (dadj_vx_dx .* dv_dt_x + dadj_vy_dy .* dv_dt_y) * dt;
                 
                 % 每100步输出一次信息
                 if mod(it, 100) == 0
