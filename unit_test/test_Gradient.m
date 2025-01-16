@@ -81,13 +81,15 @@ try
     fprintf('wavefield_solver_syn类型: %s\n', ...
         class(gradient_solver.adjoint_solver.wavefield_solver_syn));
     
-    % 测试单炮梯度计算
+    % 选择要计算的炮号
     ishot = 1;
+
+    % 计算单炮的梯度
     fprintf('\n=== 计算第%d炮梯度 ===\n', ishot);
-    
-    % 计算梯度
+    fprintf('开始时间: %s\n', datetime('now'));
     gradient = gradient_solver.compute_single_shot_gradient(ishot);
-    
+    fprintf('结束时间: %s\n', datetime('now'));
+
     % 验证梯度结果
     fprintf('\n=== 验证梯度结果 ===\n');
     fprintf('c11梯度大小: [%d, %d]\n', size(gradient.c11));

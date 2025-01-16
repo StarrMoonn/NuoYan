@@ -91,8 +91,7 @@ classdef VTI_Gradient < handle
         % 计算单炮梯度
         function gradient = compute_single_shot_gradient(obj, ishot)
             fprintf('\n=== 开始计算第 %d 炮梯度 ===\n', ishot);
-            tic;  % 开始计时
-
+        
             % 计算伴随波场
             adjoint_wavefield = obj.adjoint_solver.compute_adjoint_wavefield_single_shot(ishot);
             
@@ -110,9 +109,6 @@ classdef VTI_Gradient < handle
                         
             % 输出计算完成信息
             fprintf('\n=== 炮号 %d 梯度计算完成 ===\n', ishot);
-            
-            computation_time = toc;
-            fprintf('第 %d 炮梯度计算耗时: %.2f 秒\n', ishot, computation_time);
         end
     end
     
@@ -191,10 +187,10 @@ classdef VTI_Gradient < handle
             deltay = obj.adjoint_solver.syn_params.DELTAY;
             
             % 四阶中心差分计算导数
-            [dx, dy] = utils.computeFourthOrderDiff(field, deltax, deltay);
+            %[dx, dy] = utils.computeFourthOrderDiff(field, deltax, deltay);
 
             % 二阶中心差分计算导数
-            %[dx, dy] = utils.computeGradientField(field, deltax, deltay);
+            [dx, dy] = utils.computeGradientField(field, deltax, deltay);
         end
 
         function save_gradient(obj, gradient, ishot)
