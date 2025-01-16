@@ -52,7 +52,7 @@ try
     project_root = fileparts(script_path);
     addpath(project_root);
      
-    % 使用相对路径指定两个JSON文件路径
+    % 使用相对路径指定JSON文件路径
     obs_json_file = fullfile(project_root, 'data', 'params', 'case2', 'params_obs.json');
     syn_json_file = fullfile(project_root, 'data', 'params', 'case3', 'params_syn.json');
     
@@ -67,17 +67,9 @@ try
     
     % 使用utils.load_json_params加载参数
     fprintf('\n=== 加载参数文件 ===\n');
-    obs_params = utils.load_json_params(obs_json_file);
-    syn_params = utils.load_json_params(syn_json_file);
-    
-    % 创建参数结构体
     params = struct();
-    params.obs_params = obs_params;
-    params.syn_params = syn_params;
-    
-    % 打印测试信息
-    fprintf('观测数据参数文件: %s\n', obs_json_file);
-    fprintf('合成数据参数文件: %s\n', syn_json_file);
+    params.obs_params = utils.load_json_params(obs_json_file);
+    params.syn_params = utils.load_json_params(syn_json_file);
     
     % 创建梯度计算器实例
     fprintf('\n=== 创建梯度计算器实例 ===\n');
@@ -89,13 +81,15 @@ try
     fprintf('wavefield_solver_syn类型: %s\n', ...
         class(gradient_solver.adjoint_solver.wavefield_solver_syn));
     
-    % 测试单炮梯度计算
+    % 选择要计算的炮号
     ishot = 1;
+
+    % 计算单炮的梯度
     fprintf('\n=== 计算第%d炮梯度 ===\n', ishot);
-    
-    % 计算梯度
+    fprintf('开始时间: %s\n', datetime('now'));
     gradient = gradient_solver.compute_single_shot_gradient(ishot);
-    
+    fprintf('结束时间: %s\n', datetime('now'));
+
     % 验证梯度结果
     fprintf('\n=== 验证梯度结果 ===\n');
     fprintf('c11梯度大小: [%d, %d]\n', size(gradient.c11));
@@ -111,7 +105,7 @@ try
     fprintf('c44梯度范围: [%e, %e]\n', min(gradient.c44(:)), max(gradient.c44(:)));
     fprintf('rho梯度范围: [%e, %e]\n', min(gradient.rho(:)), max(gradient.rho(:)));
     
-    % 获取网格尺寸
+    % 获取网格尺寸用于可视化
     [nx_c11, ny_c11] = size(gradient.c11);
     
     % 定义异常体位置
@@ -149,7 +143,6 @@ try
     set(gca, 'YDir', 'reverse');
     colorbar;
     
-    % 其他梯度图类似修改...
     % C33梯度
     subplot(2,3,3);
     imagesc(gradient.c33');
