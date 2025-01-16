@@ -19,7 +19,7 @@
 % 作者：StarrMoonn
 % 日期：2025-01-16
 %
-function [dx, dy] = computeGradientField(obj, field)
+function [dx, dy] = computeGradientField(field, deltax, deltay)
     % 计算导数并除以实际间距
     [dy, dx] = gradient(field);
     
