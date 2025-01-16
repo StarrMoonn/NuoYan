@@ -4,13 +4,14 @@
 % 说明：
 %   1. 主要功能：
 %      - 计算单炮梯度
-%      - 波场互相关计算
+%      - 基于速度场的梯度计算
+%      - 基于位移场的梯度计算（可选）
 %      - 弹性参数(c11,c13,c33,c44)和密度的梯度计算
-%   2. 计算内容包括：
-%      - 正演波场和伴随波场的获取
-%      - 应变率计算（使用中心差分）
-%      - 波场互相关
-%      - 各向异性参数梯度组装
+%   2. 计算方法：
+%      - 速度场方法：直接使用速度场计算应变率
+%      - 位移场方法：通过时间积分获得位移场
+%      - 空间导数计算支持二阶和四阶差分
+%      - 时间导数采用中心差分（边界使用单侧差分）
 %
 % 类属性：
 %   - adjoint_solver: 伴随波场求解器实例（包含正演求解器）
@@ -18,37 +19,50 @@
 %   - NSTEP: 时间步数
 %
 % 主要方法：
-%   - compute_single_shot_gradient: 计算单炮梯度
-%   - correlate_wavefields: 波场互相关计算
-%   - compute_gradient: 计算空间导数（应变率）
-%   - save_gradient: 保存梯度结果
+%   1. 基础方法：
+%      - compute_single_shot_gradient: 计算单炮梯度
+%      - compute_gradient: 计算空间导数
+%      - save_gradient: 保存梯度结果
+%   2. 速度场相关方法：
+%      - correlate_wavefields: 基于速度场的波场互相关
+%   3. 位移场相关方法：
+%      - velocity_to_displacement: 速度场转位移场
+%      - correlate_wavefields_displacement: 基于位移场的波场互相关
 %
 % 梯度计算公式：
+%   速度场方法：
 %   - c11梯度：-∂vx/∂x * ∂v†x/∂x
 %   - c13梯度：-(∂v†x/∂x * ∂vy/∂y + ∂v†y/∂y * ∂vx/∂x)
 %   - c33梯度：-∂vy/∂y * ∂v†y/∂y
 %   - c44梯度：-(∂vx/∂y + ∂vy/∂x) * (∂v†x/∂y + ∂v†y/∂x)
 %   - ρ梯度：-v†i * ∂²vi/∂t²
-%   其中：v表示速度场，v†表示伴随场，∂表示偏导数
+%
+%   位移场方法：
+%   类似公式，但使用位移场u替代速度场v
 %
 % 空间导数计算：
-%   使用中心差分格式：
-%   ∂v/∂x = [v(i+1,j) - v(i-1,j)]/(2*dx)
-%   ∂v/∂y = [v(i,j+1) - v(i,j-1)]/(2*dy)
-%   其中dx,dy为实际物理网格间距
+%   支持两种方法：
+%   1. 二阶中心差分（使用MATLAB gradient函数）
+%   2. 四阶中心差分（自定义实现）
+%
+% 时间积分方法：
+%   位移场计算采用改进的梯形法则：
+%   u(t+dt) = u(t) + (v(t) + v(t+dt))*dt/2
 %
 % 依赖项：
 %   - VTI_Adjoint类
-%   - MATLAB gradient函数
+%   - utils.computeGradientField函数（二阶差分）
+%   - utils.computeFourthOrderDiff函数（四阶差分）
 %
 % 注意事项：
 %   - 需要正确初始化伴随求解器
-%   - 确保波场维度匹配
+%   - 可以选择速度场或位移场方法
+%   - 可以选择二阶或四阶空间差分
 %   - 注意内存管理（波场数据量较大）
-%   - 时间导数计算中需要考虑边界条件
+%   - 时间导数计算中已处理边界条件
 %
 % 作者：StarrMoonn
-% 日期：2025-01-09
+% 日期：2025-01-16
 %
 classdef VTI_Gradient < handle
     properties
@@ -57,7 +71,7 @@ classdef VTI_Gradient < handle
         NSTEP              % 时间步数
     end
      
-    methods
+    methods 
         function obj = VTI_Gradient(params)
             % 创建伴随波场求解器实例
             obj.adjoint_solver = VTI_Adjoint(params);
@@ -85,9 +99,12 @@ classdef VTI_Gradient < handle
             % 直接使用已经计算好的正演波场
             forward_wavefield = obj.adjoint_solver.current_forward_wavefield;
             
-            % 计算互相关得到梯度
-            gradient = obj.correlate_wavefields(forward_wavefield, adjoint_wavefield);
-
+            % 使用速度场计算梯度
+            gradient = obj.correlate_wavefields(forward_wavefield, adjoint_wavefield);  %使用速度场计算梯度
+            
+            % 使用位移场计算梯度
+            %gradient = obj.correlate_wavefields_displacement(forward_wavefield, adjoint_wavefield); 
+            
             % 保存单炮梯度到磁盘
             obj.save_gradient(gradient, ishot);
                         
@@ -97,8 +114,10 @@ classdef VTI_Gradient < handle
             computation_time = toc;
             fprintf('第 %d 炮梯度计算耗时: %.2f 秒\n', ishot, computation_time);
         end
-        
-        % 波场互相关
+    end
+    
+    %% 速度场梯度计算方法
+    methods 
         function gradient = correlate_wavefields(obj, forward_wavefield, adjoint_wavefield)
             % 获取时间步长
             dt = obj.adjoint_solver.syn_params.DELTAT;
@@ -137,16 +156,14 @@ classdef VTI_Gradient < handle
                 gradient_c33 = gradient_c33 - dvy_dy .* dadj_vy_dy * dt;
                 gradient_c44 = gradient_c44 - (dvx_dy + dvy_dx) .* (dadj_vx_dy + dadj_vy_dx) * dt;
                 
-                % 密度梯度计算
+                % 密度梯度计算（使用速度场的一阶时间导数）
                 if it > 1 && it < size(forward_wavefield.vx, 3)
-                    d2_vx_dt2 = (forward_wavefield.vx(:,:,it+1) - ...
-                                2*forward_wavefield.vx(:,:,it) + ...
-                                forward_wavefield.vx(:,:,it-1)) / (dt^2);
-                    d2_vy_dt2 = (forward_wavefield.vy(:,:,it+1) - ...
-                                2*forward_wavefield.vy(:,:,it) + ...
-                                forward_wavefield.vy(:,:,it-1)) / (dt^2);
-                    gradient_rho = gradient_rho - (dadj_vx_dx .* d2_vx_dt2 + ...
-                                                 dadj_vy_dy .* d2_vy_dt2) * dt;
+                    % 计算速度场的一阶时间导数
+                    dv_dt_x = (forward_wavefield.vx(:,:,it+1) - forward_wavefield.vx(:,:,it)) / dt;
+                    dv_dt_y = (forward_wavefield.vy(:,:,it+1) - forward_wavefield.vy(:,:,it)) / dt;
+                    
+                    gradient_rho = gradient_rho - (dadj_vx_dx .* dv_dt_x + ...
+                                                 dadj_vy_dy .* dv_dt_y) * dt;
                 end
                 
                 % 每100步输出一次最大梯度值（用于调试）
@@ -156,7 +173,7 @@ classdef VTI_Gradient < handle
                     fprintf('C13最大梯度: %e\n', max(abs(gradient_c13(:))));
                     fprintf('C33最大梯度: %e\n', max(abs(gradient_c33(:))));
                     fprintf('C44最大梯度: %e\n', max(abs(gradient_c44(:))));
-                    fprintf('密度最大梯度: %e\n', max(abs(gradient_rho(:))));
+                    fprintf('Rho最大梯度: %e\n', max(abs(gradient_rho(:))));
                 end
             end
             
@@ -168,6 +185,18 @@ classdef VTI_Gradient < handle
                              'rho', gradient_rho);
         end
         
+        function [dx, dy] = compute_gradient(obj, field)
+            % 获取网格间距
+            deltax = obj.adjoint_solver.syn_params.DELTAX;
+            deltay = obj.adjoint_solver.syn_params.DELTAY;
+            
+            % 四阶中心差分计算导数
+            [dx, dy] = utils.computeFourthOrderDiff(field, deltax, deltay);
+
+            % 二阶中心差分计算导数
+            %[dx, dy] = utils.computeGradientField(field, deltax, deltay);
+        end
+
         function save_gradient(obj, gradient, ishot)
             % 验证输入
             if ~isstruct(gradient) || ~all(isfield(gradient, {'c11','c13','c33','c44','rho'}))
@@ -196,16 +225,111 @@ classdef VTI_Gradient < handle
             save(filepath, 'gradient');
             fprintf('梯度已保存到: %s\n', filepath);
         end
-        
-        function [dx, dy] = compute_gradient(obj, field)
-            % 获取实际的网格间距（从参数中）
-            deltax = obj.adjoint_solver.syn_params.DELTAX;  % 单位：m
-            deltay = obj.adjoint_solver.syn_params.DELTAY;  % 单位：m
+    end
+    
+    %% 位移场梯度计算方法
+    methods 
+        function [ux, uy] = velocity_to_displacement(obj, vx, vy, dt)
+            % 速度场转位移场（使用梯形法则积分）
+            % 
+            % 输入参数:
+            %   vx, vy: 速度场
+            %   dt: 时间步长
+            %
+            % 输出参数:
+            %   ux, uy: 位移场
+            %
+            % 说明：
+            %   使用梯形法则进行时间积分：
+            %   u(t+dt) = u(t) + (v(t) + v(t+dt))*dt/2
             
-            % 计算导数并除以实际间距
-            [dy, dx] = gradient(field);
-            dx = dx / deltax;  % 得到正确的物理单位
-            dy = dy / deltay;
+            % 初始化位移场
+            [nx, ny, nt] = size(vx);
+            ux = zeros(nx, ny, nt);
+            uy = zeros(nx, ny, nt);
+            
+            % 时间积分（改进的梯形法则）
+            for it = 1:nt-1
+                ux(:,:,it+1) = ux(:,:,it) + (vx(:,:,it) + vx(:,:,it+1)) * dt/2;
+                uy(:,:,it+1) = uy(:,:,it) + (vy(:,:,it) + vy(:,:,it+1)) * dt/2;
+            end
+        end
+
+        function gradient = correlate_wavefields_displacement(obj, forward_wavefield, adjoint_wavefield)
+            % 基于位移场的梯度计算
+            dt = obj.adjoint_solver.syn_params.DELTAT;
+            [NX, NY, NT] = size(forward_wavefield.vx);
+            
+            % 将速度场转换为位移场
+            [fwd_ux, fwd_uy] = obj.velocity_to_displacement(forward_wavefield.vx, forward_wavefield.vy, dt);
+            [adj_ux, adj_uy] = obj.velocity_to_displacement(adjoint_wavefield.vx, adjoint_wavefield.vy, dt);
+            
+            % 初始化梯度
+            gradient_c11 = zeros(NX, NY);
+            gradient_c13 = zeros(NX, NY);
+            gradient_c33 = zeros(NX, NY);
+            gradient_c44 = zeros(NX, NY);
+            gradient_rho = zeros(NX, NY);
+            
+            fprintf('开始基于位移场的波场互相关计算:\n');
+            fprintf('时间步长 dt = %e\n', dt);
+            fprintf('总时间步数: %d\n', NT);
+            
+            % 对每个时间步进行互相关
+            for it = 1:NT
+                % 获取当前时间步的位移场
+                ux = fwd_ux(:,:,it);
+                uy = fwd_uy(:,:,it);
+                adj_ux_t = adj_ux(:,:,it);
+                adj_uy_t = adj_uy(:,:,it);
+                
+                % 计算位移场的空间导数
+                [dux_dx, dux_dy] = obj.compute_gradient(ux);
+                [duy_dx, duy_dy] = obj.compute_gradient(uy);
+                [dadj_ux_dx, dadj_ux_dy] = obj.compute_gradient(adj_ux_t);
+                [dadj_uy_dx, dadj_uy_dy] = obj.compute_gradient(adj_uy_t);
+                
+                % 更新弹性参数梯度
+                gradient_c11 = gradient_c11 - dux_dx .* dadj_ux_dx * dt;
+                gradient_c13 = gradient_c13 - (dadj_ux_dx .* duy_dy + dadj_uy_dy .* dux_dx) * dt;
+                gradient_c33 = gradient_c33 - duy_dy .* dadj_uy_dy * dt;
+                gradient_c44 = gradient_c44 - (dux_dy + duy_dx) .* (dadj_ux_dy + dadj_uy_dx) * dt;
+                
+                % 密度梯度计算 (使用速度场的时间导数)
+                % 内部点使用中心差分，边界点使用单侧差分
+                if it == 1
+                    % 第一个时间步：前向差分
+                    dv_dt_x = (forward_wavefield.vx(:,:,it+1) - forward_wavefield.vx(:,:,it)) / dt;
+                    dv_dt_y = (forward_wavefield.vy(:,:,it+1) - forward_wavefield.vy(:,:,it)) / dt;
+                elseif it == NT
+                    % 最后一个时间步：后向差分
+                    dv_dt_x = (forward_wavefield.vx(:,:,it) - forward_wavefield.vx(:,:,it-1)) / dt;
+                    dv_dt_y = (forward_wavefield.vy(:,:,it) - forward_wavefield.vy(:,:,it-1)) / dt;
+                else
+                    % 内部点：中心差分
+                    dv_dt_x = (forward_wavefield.vx(:,:,it+1) - forward_wavefield.vx(:,:,it-1)) / (2*dt);
+                    dv_dt_y = (forward_wavefield.vy(:,:,it+1) - forward_wavefield.vy(:,:,it-1)) / (2*dt);
+                end
+
+                gradient_rho = gradient_rho - (dadj_ux_dx .* dv_dt_x + dadj_uy_dy .* dv_dt_y) * dt;
+                
+                % 每100步输出一次最大梯度值
+                if mod(it, 100) == 0
+                    fprintf('时间步 %d:\n', it);
+                    fprintf('C11最大梯度: %e\n', max(abs(gradient_c11(:))));
+                    fprintf('C13最大梯度: %e\n', max(abs(gradient_c13(:))));
+                    fprintf('C33最大梯度: %e\n', max(abs(gradient_c33(:))));
+                    fprintf('C44最大梯度: %e\n', max(abs(gradient_c44(:))));
+                    fprintf('Rho最大梯度: %e\n', max(abs(gradient_rho(:))));
+                end
+            end
+            
+            % 组合最终梯度
+            gradient = struct('c11', gradient_c11, ...
+                             'c13', gradient_c13, ...
+                             'c33', gradient_c33, ...
+                             'c44', gradient_c44, ...
+                             'rho', gradient_rho);
         end
     end
 end 
