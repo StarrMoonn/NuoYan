@@ -868,7 +868,7 @@ classdef VTI_WaveFieldSolver < handle
             % 计算速度场的最大幅值
             velocnorm = max(max(sqrt(vx_data.^2 + vy_data.^2)));
             
-            % 输出当前时间步和炮号信息（统一格式，不区分单炮多炮）
+            % 输出当前时间步和炮号信息
             fprintf('炮号: %d/%d, 时间步: %d/%d\n', ...
                 obj.current_shot_number, obj.NSHOT, it, obj.NSTEP);
             fprintf('模拟时间: %.6f 秒\n', (it-1)*obj.DELTAT);
