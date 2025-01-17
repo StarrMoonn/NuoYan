@@ -62,7 +62,6 @@ classdef BaseOptimizer < handle
         max_iterations        % 最大迭代次数
         tolerance             % 收敛容差
         output_dir            % 输出目录
-        gradient_output_dir   % 梯度输出目录
         misfit_output_dir     % 残差输出目录
     end
     
