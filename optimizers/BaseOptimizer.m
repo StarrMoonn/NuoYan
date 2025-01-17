@@ -82,15 +82,11 @@ classdef BaseOptimizer < handle
             
             % 设置输出目录
             obj.output_dir = fullfile(params.project_root, 'data', 'output', 'fwi');
-            obj.gradient_output_dir = fullfile(params.project_root, 'data', 'output', 'gradient');
             obj.misfit_output_dir = fullfile(params.project_root, 'data', 'output', 'fwi_misfit');
             
             % 创建必要的目录
             if ~exist(obj.output_dir, 'dir')
                 mkdir(obj.output_dir);
-            end
-            if ~exist(obj.gradient_output_dir, 'dir')
-                mkdir(obj.gradient_output_dir);
             end
             if ~exist(obj.misfit_output_dir, 'dir')
                 mkdir(obj.misfit_output_dir);

@@ -99,13 +99,13 @@ classdef VTI_Gradient < handle
             forward_wavefield = obj.adjoint_solver.current_forward_wavefield;
             
             % 使用速度场计算梯度
-            %gradient = obj.correlate_wavefields(forward_wavefield, adjoint_wavefield);  %使用速度场计算梯度
+            gradient = obj.correlate_wavefields(forward_wavefield, adjoint_wavefield);  %使用速度场计算梯度
             
             % 使用位移场计算梯度
             %gradient = obj.correlate_wavefields_displacement(forward_wavefield, adjoint_wavefield); 
 
             % 使用并行计算梯度  
-            gradient = obj.correlate_wavefields_parallel_batched(forward_wavefield, adjoint_wavefield);
+            %gradient = obj.correlate_wavefields_parallel_batched(forward_wavefield, adjoint_wavefield);
             
             % 保存单炮梯度到磁盘
             obj.save_gradient(gradient, ishot);
