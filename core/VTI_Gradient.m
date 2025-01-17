@@ -251,7 +251,7 @@ classdef VTI_Gradient < handle
     
     %% 位移场梯度计算方法
     methods 
-        function [ux, uy] = velocity_to_displacement(～, vx, vy, dt)
+        function [ux, uy] = velocity_to_displacement(~, vx, vy, dt)
             % 速度场转位移场（使用梯形法则积分）
             % 
             % 输入参数:
