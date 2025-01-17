@@ -59,6 +59,7 @@ classdef VTI_Adjoint < handle
         save_adjoint_snapshots  % 是否保存伴随波场快照
         snapshot_interval       % 快照保存间隔
         adjoint_output_dir      % 伴随波场输出目录
+        misfit_output_dir      % 目标函数值输出目录
         
         % 当前炮的数据
         current_residuals_vx    % 当前炮的速度场x分量残差
@@ -98,6 +99,15 @@ classdef VTI_Adjoint < handle
             % 设置输出目录
             current_dir = fileparts(fileparts(mfilename('fullpath')));
             obj.adjoint_output_dir = fullfile(current_dir, 'data', 'output', 'wavefield', 'adjoint');
+            obj.misfit_output_dir = fullfile(current_dir, 'data', 'output', 'fwi_misfit');
+            
+            % 创建必要的目录
+            if ~exist(obj.adjoint_output_dir, 'dir')
+                mkdir(obj.adjoint_output_dir);
+            end
+            if ~exist(obj.misfit_output_dir, 'dir')
+                mkdir(obj.misfit_output_dir);
+            end
         end
         
       
@@ -116,6 +126,17 @@ classdef VTI_Adjoint < handle
             % 计算残差
             obj.current_residuals_vx = obs_vx - syn_vx;
             obj.current_residuals_vy = obs_vy - syn_vy;
+            
+            % 计算并保存单炮二范数
+            shot_misfit = 0.5 * (sum(obj.current_residuals_vx(:).^2) + ...
+                                 sum(obj.current_residuals_vy(:).^2));
+            
+            % 保存单炮二范数到硬盘（使用新的路径）
+            misfit_filename = fullfile(obj.misfit_output_dir, sprintf('misfit_shot_%d.mat', ishot));
+            save(misfit_filename, 'shot_misfit');
+            
+            % 清理内存
+            clear shot_misfit;
             
             % 输出单炮的残差值
             fprintf('残差 vx 最大值: %e\n', max(abs(obj.current_residuals_vx(:))));

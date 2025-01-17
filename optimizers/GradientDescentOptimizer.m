@@ -64,17 +64,18 @@ classdef GradientDescentOptimizer < BaseOptimizer
             fprintf('\n=== 开始梯度下降法FWI迭代 ===\n');
             
             % 1. 初始化
-            initial_misfit = obj.compute_misfit();   % 计算初始状态的目标函数值
-            previous_misfit = initial_misfit;        % 保存上一次迭代的目标函数值
+            total_gradient = obj.compute_total_gradient();   % 先计算梯度（同时会计算残差和二范数）
+            initial_misfit = obj.get_current_total_misfit(); % 读取已计算的总二范数
+            previous_misfit = initial_misfit;
             all_misfits = zeros(obj.max_iterations + 1, 1);
-            all_misfits(1) = initial_misfit;         % 存储初始目标函数值
+            all_misfits(1) = initial_misfit;
             
             % 2. 主迭代循环
             for iter = 1:obj.max_iterations
                 % 2.1 打印当前迭代信息
                 fprintf('\n=== 第 %d/%d 次迭代 ===\n', iter, obj.max_iterations);
                 
-                % 2.2 计算当前模型的梯度
+                % 2.2 计算当前模型的梯度（这步会同时计算新的残差和二范数）
                 total_gradient = obj.compute_total_gradient();
                 obj.save_iteration_gradient(total_gradient, iter);
                 
@@ -84,8 +85,8 @@ classdef GradientDescentOptimizer < BaseOptimizer
                 % 2.4 更新模型参数
                 obj.update_model_with_step(total_gradient, step);
                 
-                % 2.5 计算更新后的目标函数值
-                current_misfit = obj.compute_misfit();
+                % 2.5 获取更新后的目标函数值（直接读取，不重新计算）
+                current_misfit = obj.get_current_total_misfit();
                 all_misfits(iter + 1) = current_misfit;
                 
                 % 2.6 计算并打印改进程度

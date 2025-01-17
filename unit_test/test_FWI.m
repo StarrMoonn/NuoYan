@@ -32,7 +32,7 @@ try
 
     % 设置FWI特有参数
     params.optimization = 'gradient_descent';  % 可选: 'gradient_descent', 'BB', 'LBFGS'
-    params.max_iterations = 20;     % 最大迭代次数
+    params.max_iterations = 2;     % 最大迭代次数
     params.tolerance = 0.1;         % 收敛容差（10%）
 
     % 记录开始时间

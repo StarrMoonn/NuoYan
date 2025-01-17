@@ -83,9 +83,14 @@ classdef BaseOptimizer < handle
             % 获取炮数
             obj.nshots = params.syn_params.NSHOT;
             
-            % 设置输出目录
-            obj.output_dir = fullfile(params.project_root, 'data', 'output', 'fwi');
-            obj.misfit_output_dir = fullfile(params.project_root, 'data', 'output', 'fwi_misfit');
+            % 获取当前脚本的路径
+            [script_path, ~, ~] = fileparts(mfilename('fullpath'));
+            % 设置项目根目录为当前脚本的上级目录
+            project_root = fileparts(script_path);
+            
+            % 设置输出目录（使用本地获取的project_root）
+            obj.output_dir = fullfile(project_root, 'data', 'output', 'fwi');
+            obj.misfit_output_dir = fullfile(project_root, 'data', 'output', 'fwi_misfit');
             
             % 创建必要的目录
             if ~exist(obj.output_dir, 'dir')
@@ -96,35 +101,22 @@ classdef BaseOptimizer < handle
             end
         end
         
-        %% === 残差梯度计算函数 ===
-        function misfit = compute_misfit(obj)
-            % 计算所有炮的总目标函数值
-            nshots = obj.gradient_solver.adjoint_solver.syn_params.NSHOT;
-            misfit = 0;
-            
-            for ishot = 1:nshots
-                obs_vx_shot = obj.gradient_solver.adjoint_solver.obs_vx{ishot};
-                obs_vy_shot = obj.gradient_solver.adjoint_solver.obs_vy{ishot};
-                syn_vx_shot = obj.gradient_solver.adjoint_solver.syn_vx{ishot};
-                syn_vy_shot = obj.gradient_solver.adjoint_solver.syn_vy{ishot};
-                
-                [shot_misfit, ~] = utils.compute_misfit(obs_vx_shot, ...
-                                                     obs_vy_shot, ...
-                                                     syn_vx_shot, ...
-                                                     syn_vy_shot);
-                misfit = misfit + shot_misfit;
-            end
-            
-            fprintf('目标函数残差: %e\n', misfit);
-        end
-        
+        %% === 总梯度值和总误差函数===    
         function total_gradient = compute_total_gradient(obj)
             % 计算所有炮的总梯度
-            nshots = obj.gradient_solver.adjoint_solver.syn_params.NSHOT;
+            nshots = obj.nshots;
             nx = obj.gradient_solver.adjoint_solver.syn_params.NX;
             ny = obj.gradient_solver.adjoint_solver.syn_params.NY;
             
-            % 初始化总梯度
+            % 1. 首先逐炮计算梯度并保存到硬盘
+            fprintf('\n=== 开始计算各炮梯度 ===\n');
+            for ishot = 1:nshots
+                fprintf('计算第%d/%d炮梯度...\n', ishot, nshots);
+                % compute_single_shot_gradient会自动保存到硬盘并清理内存
+                obj.gradient_solver.compute_single_shot_gradient(ishot);
+            end
+            
+            % 2. 初始化总梯度结构
             total_gradient = struct();
             total_gradient.c11 = zeros(nx, ny);
             total_gradient.c13 = zeros(nx, ny);
@@ -132,26 +124,46 @@ classdef BaseOptimizer < handle
             total_gradient.c44 = zeros(nx, ny);
             total_gradient.rho = zeros(nx, ny);
             
-            fprintf('开始计算%d炮的梯度...\n', nshots);
+            % 3. 从硬盘读取并累加所有炮的梯度
+            fprintf('\n=== 开始累加各炮梯度 ===\n');
             for ishot = 1:nshots
-                fprintf('计算第%d/%d炮梯度...\n', ishot, nshots);
-                % 计算单炮梯度并直接累加
-                shot_gradient = obj.gradient_solver.compute_single_shot_gradient(ishot);
+                fprintf('读取并累加第%d/%d炮梯度...\n', ishot, nshots);
+                
+                % 从硬盘读取单炮梯度
+                gradient_filename = fullfile(obj.gradient_solver.gradient_output_dir, ...
+                                          sprintf('gradient_shot_%d.mat', ishot));
+                shot_gradient = load(gradient_filename);
                 
                 % 累加到总梯度
-                total_gradient.c11 = total_gradient.c11 + shot_gradient.c11;
-                total_gradient.c13 = total_gradient.c13 + shot_gradient.c13;
-                total_gradient.c33 = total_gradient.c33 + shot_gradient.c33;
-                total_gradient.c44 = total_gradient.c44 + shot_gradient.c44;
-                total_gradient.rho = total_gradient.rho + shot_gradient.rho;
+                total_gradient.c11 = total_gradient.c11 + shot_gradient.gradient.c11;
+                total_gradient.c13 = total_gradient.c13 + shot_gradient.gradient.c13;
+                total_gradient.c33 = total_gradient.c33 + shot_gradient.gradient.c33;
+                total_gradient.c44 = total_gradient.c44 + shot_gradient.gradient.c44;
+                total_gradient.rho = total_gradient.rho + shot_gradient.gradient.rho;
                 
-                % 清理单炮梯度
+                % 清理临时变量
                 clear shot_gradient;
             end
             
-            fprintf('梯度计算完成\n');
+            fprintf('总梯度计算完成\n');
         end
-        
+
+        function misfit = get_current_total_misfit(obj)
+            % 直接从硬盘读取已计算的二范数（不重新计算）
+            nshots = obj.nshots;
+            misfit = 0;
+            
+            fprintf('\n=== 读取总目标函数值 ===\n');
+            for ishot = 1:nshots
+                misfit_filename = fullfile(obj.misfit_output_dir, ...
+                                         sprintf('misfit_shot_%d.mat', ishot));
+                load(misfit_filename, 'shot_misfit');
+                misfit = misfit + shot_misfit;
+                fprintf('第 %d 炮目标函数值: %e\n', ishot, shot_misfit);
+            end
+            fprintf('总目标函数值: %e\n', misfit);
+        end
+
         %% === 模型操作函数 ===
         function model = get_current_model(obj)
             syn_params = obj.gradient_solver.adjoint_solver.syn_params;
