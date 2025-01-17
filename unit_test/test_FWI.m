@@ -11,56 +11,44 @@ try
     project_root = fileparts(script_path);
     addpath(project_root);
     
-    % 创建输出目录
-    output_dir = fullfile(project_root, 'output');
-    gradient_output_dir = fullfile(output_dir, 'gradients');
-    misfit_output_dir = fullfile(output_dir, 'misfits');
-    
-    % 确保输出目录存在
-    if ~exist(output_dir, 'dir'), mkdir(output_dir); end
-    if ~exist(gradient_output_dir, 'dir'), mkdir(gradient_output_dir); end
-    if ~exist(misfit_output_dir, 'dir'), mkdir(misfit_output_dir); end
-    
-    % 设置优化器参数
-    optimizer_params = struct();
-    optimizer_params.max_iterations = 20;     % 最大迭代次数
-    optimizer_params.tolerance = 0.1;         % 收敛容差（10%）
-    optimizer_params.output_dir = output_dir;
-    optimizer_params.gradient_output_dir = gradient_output_dir;
-    optimizer_params.misfit_output_dir = misfit_output_dir;
-    
-    % BB法特有参数
-    optimizer_params.bb_params = struct();
-    optimizer_params.bb_params.initial_step = 0.1;
-    optimizer_params.bb_params.memory_length = 5;
-    optimizer_params.bb_params.max_step = 1.0;
-    optimizer_params.bb_params.min_step = 1e-6;
-    
-    % 设置优化方法
-    optimizer_params.optimization_method = 'BB';  % 可选: 'gradient_descent', 'BB', 'LBFGS'
-    
-    % 加载模型参数
-    optimizer_params.obs_json_file = fullfile(project_root, 'data', 'params', 'case2', 'params_obs.json');
-    optimizer_params.syn_json_file = fullfile(project_root, 'data', 'params', 'case3', 'params_syn.json');
+    % 使用相对路径指定JSON文件路径
+    obs_json_file = fullfile(project_root, 'data', 'params', 'case2', 'params_obs.json');
+    syn_json_file = fullfile(project_root, 'data', 'params', 'case3', 'params_syn.json');
     
     % 验证JSON文件是否存在
-    if ~exist(optimizer_params.obs_json_file, 'file')
-        error('无法找到观测数据JSON文件: %s', optimizer_params.obs_json_file);
+    if ~exist(obs_json_file, 'file')
+        error('无法找到观测数据JSON文件: %s', obs_json_file);
     end
     
-    if ~exist(optimizer_params.syn_json_file, 'file')
-        error('无法找到合成数据JSON文件: %s', optimizer_params.syn_json_file);
+    if ~exist(syn_json_file, 'file')
+        error('无法找到合成数据JSON文件: %s', syn_json_file);
     end
-    
-    % 创建梯度求解器（假设这是必需的）
-    gradient_solver = GradientSolver(optimizer_params);  % 需要确保这个类存在
-    optimizer_params.gradient_solver = gradient_solver;
-    
+
+    % 使用utils.load_json_params加载参数
+    fprintf('\n=== 加载参数文件 ===\n');
+    params = struct();
+    params.obs_params = utils.load_json_params(obs_json_file);
+    params.syn_params = utils.load_json_params(syn_json_file);
+
+    % 设置FWI特有参数
+    params.optimization = 'gradient_descent';  % 可选: 'gradient_descent', 'BB', 'LBFGS'
+    params.max_iterations = 20;     % 最大迭代次数
+    params.tolerance = 0.1;         % 收敛容差（10%）
+
+    % 记录开始时间
+    start_time = datetime('now');
+    fprintf('\n=== 开始FWI测试 [%s] ===\n', start_time);
+
     % 创建并运行FWI
-    fwi = VTI_FWI(optimizer_params);
+    fprintf('\n=== 创建并运行FWI实例 ===\n');
+    fwi = VTI_FWI(params);
     fwi.run();
     
-    fprintf('\n=== FWI测试完成 ===\n');
+    % 记录结束时间并计算总用时
+    end_time = datetime('now');
+    elapsed_time = end_time - start_time;
+    fprintf('\n=== FWI测试完成 [%s] ===\n', end_time);
+    fprintf('总计算时间: %s\n', elapsed_time);
     
 catch ME
     fprintf('\n=== 测试失败 ===\n');

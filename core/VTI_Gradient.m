@@ -91,23 +91,46 @@ classdef VTI_Gradient < handle
         % 计算单炮梯度
         function gradient = compute_single_shot_gradient(obj, ishot)
             fprintf('\n=== 开始计算第 %d 炮梯度 ===\n', ishot);
-        
-            % 计算伴随波场
-            adjoint_wavefield = obj.adjoint_solver.compute_adjoint_wavefield_single_shot(ishot);
+
+            try
+                % 计算伴随波场
+                adjoint_wavefield = obj.adjoint_solver.compute_adjoint_wavefield_single_shot(ishot);
+                
+                % 获取正演波场
+                forward_wavefield = obj.adjoint_solver.current_forward_wavefield;
+                
+                % 使用速度场计算梯度
+                gradient = obj.correlate_wavefields(forward_wavefield, adjoint_wavefield);
+                
+                % 保存单炮梯度到磁盘
+                obj.save_gradient(gradient, ishot);
+                
+            catch ME
+                fprintf('计算梯度时发生错误: %s\n', ME.message);
+                rethrow(ME);
+                
+            finally
+                % 清理内存
+                % 1. 清除波场
+                if exist('forward_wavefield', 'var')
+                    clear forward_wavefield;
+                end
+                if exist('adjoint_wavefield', 'var')
+                    clear adjoint_wavefield;
+                end
+                
+                % 2. 清除所有梯度相关变量
+                if exist('gradient', 'var')
+                    clear gradient gradient_c11 gradient_c13 gradient_c33 gradient_c44 gradient_rho;
+                end
+                
+                % 3. 清除adjoint_solver中的临时波场
+                obj.adjoint_solver.current_forward_wavefield = [];
+                
+                % 4. 强制垃圾回收
+                %gc = java.lang.System.gc();
+            end
             
-            % 直接使用已经计算好的正演波场
-            forward_wavefield = obj.adjoint_solver.current_forward_wavefield;
-            
-            % 使用速度场计算梯度
-            gradient = obj.correlate_wavefields(forward_wavefield, adjoint_wavefield);  %使用速度场计算梯度
-            
-            % 使用位移场计算梯度
-            %gradient = obj.correlate_wavefields_displacement(forward_wavefield, adjoint_wavefield); 
-            
-            % 保存单炮梯度到磁盘
-            obj.save_gradient(gradient, ishot);
-                        
-            % 输出计算完成信息
             fprintf('\n=== 炮号 %d 梯度计算完成 ===\n', ishot);
         end
     end

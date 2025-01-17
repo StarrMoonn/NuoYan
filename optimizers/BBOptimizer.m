@@ -67,7 +67,22 @@ classdef BBOptimizer < BaseOptimizer
         function obj = BBOptimizer(params)
             % 构造函数
             obj = obj@BaseOptimizer(params);
-            obj.bb_params = params.bb_params;
+            
+            % 设置BB法默认参数
+            obj.bb_params = struct();
+            obj.bb_params.initial_step = 0.1;    % 初始步长
+            obj.bb_params.memory_length = 5;     % 记忆长度
+            obj.bb_params.max_step = 1.0;        % 最大步长
+            obj.bb_params.min_step = 1e-6;       % 最小步长
+            
+            % 如果传入了自定义BB参数，则覆盖默认值
+            if isfield(params, 'bb_params')
+                fn = fieldnames(params.bb_params);
+                for i = 1:length(fn)
+                    obj.bb_params.(fn{i}) = params.bb_params.(fn{i});
+                end
+            end
+            
             obj.misfit_history = [];
             obj.gk_old_array = [];
         end

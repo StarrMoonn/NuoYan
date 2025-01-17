@@ -62,8 +62,8 @@ classdef BaseOptimizer < handle
         max_iterations        % 最大迭代次数
         tolerance             % 收敛容差
         output_dir            % 输出目录
-        gradient_output_dir   % 梯度输出目录
         misfit_output_dir     % 残差输出目录
+        nshots              % 炮数
     end
     
     methods (Abstract)
@@ -80,17 +80,16 @@ classdef BaseOptimizer < handle
             obj.max_iterations = 50;  % 默认最大迭代次数
             obj.tolerance = 0.1;      % 默认收敛容差
             
+            % 获取炮数
+            obj.nshots = params.syn_params.NSHOT;
+            
             % 设置输出目录
             obj.output_dir = fullfile(params.project_root, 'data', 'output', 'fwi');
-            obj.gradient_output_dir = fullfile(params.project_root, 'data', 'output', 'gradient');
             obj.misfit_output_dir = fullfile(params.project_root, 'data', 'output', 'fwi_misfit');
             
             % 创建必要的目录
             if ~exist(obj.output_dir, 'dir')
                 mkdir(obj.output_dir);
-            end
-            if ~exist(obj.gradient_output_dir, 'dir')
-                mkdir(obj.gradient_output_dir);
             end
             if ~exist(obj.misfit_output_dir, 'dir')
                 mkdir(obj.misfit_output_dir);
@@ -125,6 +124,7 @@ classdef BaseOptimizer < handle
             nx = obj.gradient_solver.adjoint_solver.syn_params.NX;
             ny = obj.gradient_solver.adjoint_solver.syn_params.NY;
             
+            % 初始化总梯度
             total_gradient = struct();
             total_gradient.c11 = zeros(nx, ny);
             total_gradient.c13 = zeros(nx, ny);
@@ -132,21 +132,21 @@ classdef BaseOptimizer < handle
             total_gradient.c44 = zeros(nx, ny);
             total_gradient.rho = zeros(nx, ny);
             
-            shot_gradients = cell(nshots, 1);
-            
             fprintf('开始计算%d炮的梯度...\n', nshots);
-            parfor ishot = 1:nshots
-                fprintf('计算第%d/%d炮梯度...\n', ishot, nshots);
-                shot_gradients{ishot} = obj.gradient_solver.compute_single_shot_gradient(ishot);
-            end
-            
-            fprintf('累加所有炮的梯度...\n');
             for ishot = 1:nshots
-                total_gradient.c11 = total_gradient.c11 + shot_gradients{ishot}.c11;
-                total_gradient.c13 = total_gradient.c13 + shot_gradients{ishot}.c13;
-                total_gradient.c33 = total_gradient.c33 + shot_gradients{ishot}.c33;
-                total_gradient.c44 = total_gradient.c44 + shot_gradients{ishot}.c44;
-                total_gradient.rho = total_gradient.rho + shot_gradients{ishot}.rho;
+                fprintf('计算第%d/%d炮梯度...\n', ishot, nshots);
+                % 计算单炮梯度并直接累加
+                shot_gradient = obj.gradient_solver.compute_single_shot_gradient(ishot);
+                
+                % 累加到总梯度
+                total_gradient.c11 = total_gradient.c11 + shot_gradient.c11;
+                total_gradient.c13 = total_gradient.c13 + shot_gradient.c13;
+                total_gradient.c33 = total_gradient.c33 + shot_gradient.c33;
+                total_gradient.c44 = total_gradient.c44 + shot_gradient.c44;
+                total_gradient.rho = total_gradient.rho + shot_gradient.rho;
+                
+                % 清理单炮梯度
+                clear shot_gradient;
             end
             
             fprintf('梯度计算完成\n');
