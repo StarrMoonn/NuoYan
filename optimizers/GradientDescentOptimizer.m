@@ -127,9 +127,6 @@ classdef GradientDescentOptimizer < BaseOptimizer
         
         function step = compute_step_length(obj, total_gradient, current_misfit)
             % 使用抛物线法计算最优步长
-            % 输入参数：
-            %   total_gradient: 当前迭代的总梯度
-            %   current_misfit: 当前的目标函数值
             
             % 1. 设置测试步长
             step1 = 0.1;  % 第一个测试步长
@@ -143,12 +140,16 @@ classdef GradientDescentOptimizer < BaseOptimizer
             
             % 4. 测试step1
             obj.update_model_with_step(total_gradient, step1);
-            misfit1 = obj.compute_misfit();
+            % 只计算残差和二范数，不计算梯度
+            obj.gradient_solver.adjoint_solver.compute_residuals_all_shots();
+            misfit1 = obj.get_current_total_misfit();
             
             % 5. 测试step2
             obj.set_current_model(current_model);  % 恢复原始模型
             obj.update_model_with_step(total_gradient, step2);
-            misfit2 = obj.compute_misfit();
+            % 只计算残差和二范数，不计算梯度
+            obj.gradient_solver.adjoint_solver.compute_residuals_all_shots();
+            misfit2 = obj.get_current_total_misfit();
             
             % 6. 使用抛物线拟合计算最优步长
             % f(α) ≈ aα² + bα + c

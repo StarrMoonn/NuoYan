@@ -237,5 +237,34 @@ classdef VTI_Adjoint < handle
             
             fprintf('保存伴随波场快照: 炮号 %d, 时间步 %d\n', ishot, it);
         end
+        
+        function total_misfit = compute_residuals_all_shots(obj)
+            % 计算所有炮的残差和二范数，并返回总二范数
+            fprintf('\n=== 开始计算所有炮的残差和二范数 ===\n');
+            nshots = obj.syn_params.NSHOT;
+            total_misfit = 0;  % 初始化总二范数
+            
+            % 清理之前的波场（如果有）
+            if ~isempty(obj.current_forward_wavefield)
+                obj.current_forward_wavefield = [];
+            end
+            
+            % 逐炮计算残差和二范数
+            for ishot = 1:nshots
+                fprintf('计算第%d/%d炮残差...\n', ishot, nshots);
+                obj.compute_residuals_single_shot(ishot);
+                
+                % 读取刚保存的单炮二范数并累加
+                misfit_filename = fullfile(obj.misfit_output_dir, sprintf('misfit_shot_%d.mat', ishot));
+                shot_data = load(misfit_filename);
+                total_misfit = total_misfit + shot_data.shot_misfit;
+                
+                % 每炮计算后清理正演波场（因为抛物线法不需要）
+                obj.current_forward_wavefield = [];
+            end
+            
+            fprintf('总二范数: %e\n', total_misfit);
+            fprintf('所有炮的残差和二范数计算完成\n\n');
+        end
     end
 end 
