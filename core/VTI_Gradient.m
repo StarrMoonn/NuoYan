@@ -91,26 +91,46 @@ classdef VTI_Gradient < handle
         % 计算单炮梯度
         function gradient = compute_single_shot_gradient(obj, ishot)
             fprintf('\n=== 开始计算第 %d 炮梯度 ===\n', ishot);
-        
-            % 计算伴随波场
-            adjoint_wavefield = obj.adjoint_solver.compute_adjoint_wavefield_single_shot(ishot);
-            
-            % 直接使用已经计算好的正演波场
-            forward_wavefield = obj.adjoint_solver.current_forward_wavefield;
-            
-            % 使用速度场计算梯度
-            gradient = obj.correlate_wavefields(forward_wavefield, adjoint_wavefield);  %使用速度场计算梯度
-            
-            % 使用位移场计算梯度
-            %gradient = obj.correlate_wavefields_displacement(forward_wavefield, adjoint_wavefield); 
 
-            % 使用并行计算梯度  
-            %gradient = obj.correlate_wavefields_parallel_batched(forward_wavefield, adjoint_wavefield);
+            try
+                % 计算伴随波场
+                adjoint_wavefield = obj.adjoint_solver.compute_adjoint_wavefield_single_shot(ishot);
+                
+                % 获取正演波场
+                forward_wavefield = obj.adjoint_solver.current_forward_wavefield;
+                
+                % 使用速度场计算梯度
+                gradient = obj.correlate_wavefields(forward_wavefield, adjoint_wavefield);
+                
+                % 保存单炮梯度到磁盘
+                obj.save_gradient(gradient, ishot);
+                
+            catch ME
+                fprintf('计算梯度时发生错误: %s\n', ME.message);
+                rethrow(ME);
+                
+            finally
+                % 清理内存
+                % 1. 清除波场
+                if exist('forward_wavefield', 'var')
+                    clear forward_wavefield;
+                end
+                if exist('adjoint_wavefield', 'var')
+                    clear adjoint_wavefield;
+                end
+                
+                % 2. 清除所有梯度相关变量
+                if exist('gradient', 'var')
+                    clear gradient gradient_c11 gradient_c13 gradient_c33 gradient_c44 gradient_rho;
+                end
+                
+                % 3. 清除adjoint_solver中的临时波场
+                obj.adjoint_solver.current_forward_wavefield = [];
+                
+                % 4. 强制垃圾回收
+                %gc = java.lang.System.gc();
+            end
             
-            % 保存单炮梯度到磁盘
-            obj.save_gradient(gradient, ishot);
-                        
-            % 输出计算完成信息
             fprintf('\n=== 炮号 %d 梯度计算完成 ===\n', ishot);
         end
     end
@@ -216,10 +236,10 @@ classdef VTI_Gradient < handle
             deltay = obj.adjoint_solver.syn_params.DELTAY;
             
             % 四阶中心差分计算导数
-            [dx, dy] = utils.computeFourthOrderDiff(field, deltax, deltay);
+            %[dx, dy] = utils.computeFourthOrderDiff(field, deltax, deltay);
 
             % 二阶中心差分计算导数
-            %[dx, dy] = utils.computeGradientField(field, deltax, deltay);
+            [dx, dy] = utils.computeGradientField(field, deltax, deltay);
         end
 
         function save_gradient(obj, gradient, ishot)
@@ -350,143 +370,6 @@ classdef VTI_Gradient < handle
             end
             
             % 组合最终梯度
-            gradient = struct('c11', gradient_c11, ...
-                             'c13', gradient_c13, ...
-                             'c33', gradient_c33, ...
-                             'c44', gradient_c44, ...
-                             'rho', gradient_rho);
-        end
-    
-        function gradient = correlate_wavefields_parallel_batched(obj, forward_wavefield, adjoint_wavefield)
-            % 检查并初始化并行计算池
-            if isempty(gcp('nocreate'))
-                num_cores = feature('numcores');
-                num_workers = max(2, min(num_cores, num_cores));
-                fprintf('创建并行计算池，使用 %d 个工作进程...\n', num_workers);
-                parpool('local', num_workers);
-            else
-                poolobj = gcp('nocreate');
-                fprintf('使用现有并行计算池，当前工作进程数: %d\n', poolobj.NumWorkers);
-            end
-            
-            % 获取时间步长和网格参数
-            dt = obj.adjoint_solver.syn_params.DELTAT;
-            dx = obj.adjoint_solver.syn_params.DELTAX;
-            dy = obj.adjoint_solver.syn_params.DELTAY;
-            
-            % 初始化
-            [NX, NY, NT] = size(forward_wavefield.vx);
-            gradient_c11 = zeros(NX, NY);
-            gradient_c13 = zeros(NX, NY);
-            gradient_c33 = zeros(NX, NY);
-            gradient_c44 = zeros(NX, NY);
-            gradient_rho = zeros(NX, NY);
-            
-            % 波场能量监控
-            forward_energy = zeros(NT,1);
-            adjoint_energy = zeros(NT,1);
-            
-            % 设置分批大小
-            batch_size = 500;  % 每批处理的时间步数
-            num_batches = ceil(NT/batch_size);
-            
-            fprintf('开始分批并行波场互相关计算:\n');
-            fprintf('总时间步数: %d, 分批数: %d, 每批大小: %d\n', NT, num_batches, batch_size);
-            
-            % 分批处理
-            for batch = 1:num_batches
-                tic;  % 记录每批次的开始时间
-                
-                % 计算当前批次的时间步范围
-                start_idx = (batch-1)*batch_size + 1;
-                end_idx = min(batch*batch_size, NT);
-                current_batch_size = end_idx - start_idx + 1;
-                
-                fprintf('处理第 %d/%d 批, 时间步 [%d, %d]...\n', batch, num_batches, start_idx, end_idx);
-                
-                % 当前批次的临时结果数组
-                batch_c11 = zeros(NX, NY);
-                batch_c13 = zeros(NX, NY);
-                batch_c33 = zeros(NX, NY);
-                batch_c44 = zeros(NX, NY);
-                batch_rho = zeros(NX, NY);
-                
-                % 并行处理当前批次的时间步
-                parfor it = start_idx:end_idx
-                    % 读取当前时间步的波场
-                    fwd_vx = forward_wavefield.vx(:,:,it);
-                    fwd_vy = forward_wavefield.vy(:,:,it);
-                    adj_vx = adjoint_wavefield.vx(:,:,it);
-                    adj_vy = adjoint_wavefield.vy(:,:,it);
-                    
-                    % 计算波场能量
-                    forward_energy(it) = sum(sum(fwd_vx.^2 + fwd_vy.^2));
-                    adjoint_energy(it) = sum(sum(adj_vx.^2 + adj_vy.^2));
-                    
-                    % 计算应变率
-                    [dvx_dx, dvx_dy] = utils.computeGradientField(fwd_vx, dx, dy);
-                    [dvy_dx, dvy_dy] = utils.computeGradientField(fwd_vy, dx, dy);
-                    [dadj_vx_dx, dadj_vx_dy] = utils.computeGradientField(adj_vx, dx, dy);
-                    [dadj_vy_dx, dadj_vy_dy] = utils.computeGradientField(adj_vy, dx, dy);
-                    
-                    % 计算当前时间步的梯度贡献
-                    local_c11 = -dvx_dx .* dadj_vx_dx * dt;
-                    local_c13 = -(dadj_vx_dx .* dvy_dy + dadj_vy_dy .* dvx_dx) * dt;
-                    local_c33 = -dvy_dy .* dadj_vy_dy * dt;
-                    local_c44 = -(dvx_dy + dvy_dx) .* (dadj_vx_dy + dadj_vy_dx) * dt;
-                    
-                    % 密度梯度计算
-                    if it == 1
-                        dv_dt_x = (forward_wavefield.vx(:,:,it+1) - forward_wavefield.vx(:,:,it)) / dt;
-                        dv_dt_y = (forward_wavefield.vy(:,:,it+1) - forward_wavefield.vy(:,:,it)) / dt;
-                    elseif it == NT
-                        dv_dt_x = (forward_wavefield.vx(:,:,it) - forward_wavefield.vx(:,:,it-1)) / dt;
-                        dv_dt_y = (forward_wavefield.vy(:,:,it) - forward_wavefield.vy(:,:,it-1)) / dt;
-                    else
-                        dv_dt_x = (forward_wavefield.vx(:,:,it+1) - forward_wavefield.vx(:,:,it-1)) / (2*dt);
-                        dv_dt_y = (forward_wavefield.vy(:,:,it+1) - forward_wavefield.vy(:,:,it-1)) / (2*dt);
-                    end
-                    
-                    local_rho = -(dadj_vx_dx .* dv_dt_x + dadj_vy_dy .* dv_dt_y) * dt;
-                    
-                    % 累加到批次结果
-                    batch_c11 = batch_c11 + local_c11;
-                    batch_c13 = batch_c13 + local_c13;
-                    batch_c33 = batch_c33 + local_c33;
-                    batch_c44 = batch_c44 + local_c44;
-                    batch_rho = batch_rho + local_rho;
-                end
-                
-                % 累加当前批次结果到总梯度
-                gradient_c11 = gradient_c11 + batch_c11;
-                gradient_c13 = gradient_c13 + batch_c13;
-                gradient_c33 = gradient_c33 + batch_c33;
-                gradient_c44 = gradient_c44 + batch_c44;
-                gradient_rho = gradient_rho + batch_rho;
-                
-                % 输出当前批次处理时间
-                batch_time = toc;
-                fprintf('第 %d 批处理完成，用时: %.2f 秒\n', batch, batch_time);
-            end
-            
-            % 绘制并保存波场能量曲线
-            figure;
-            plot(1:NT, forward_energy, 'b-', 1:NT, adjoint_energy, 'r--');
-            legend('正演波场能量', '伴随波场能量');
-            xlabel('时间步');
-            ylabel('波场能量');
-            title('波场能量随时间变化');
-            savefig(fullfile(obj.gradient_output_dir, 'wavefield_energy.fig'));
-            
-            % 输出最终梯度信息
-            fprintf('\n=== 最终梯度统计 ===\n');
-            fprintf('C11最大梯度: %e\n', max(abs(gradient_c11(:))));
-            fprintf('C13最大梯度: %e\n', max(abs(gradient_c13(:))));
-            fprintf('C33最大梯度: %e\n', max(abs(gradient_c33(:))));
-            fprintf('C44最大梯度: %e\n', max(abs(gradient_c44(:))));
-            fprintf('Rho最大梯度: %e\n', max(abs(gradient_rho(:))));
-            
-            % 组合所有参数的梯度
             gradient = struct('c11', gradient_c11, ...
                              'c13', gradient_c13, ...
                              'c33', gradient_c33, ...
