@@ -64,17 +64,18 @@ classdef GradientDescentOptimizer < BaseOptimizer
             fprintf('\n=== 开始梯度下降法FWI迭代 ===\n');
             
             % 1. 初始化
-            initial_misfit = obj.compute_misfit();   % 计算初始状态的目标函数值
-            previous_misfit = initial_misfit;        % 保存上一次迭代的目标函数值
+            total_gradient = obj.compute_total_gradient();   % 先计算梯度（同时会计算残差和二范数）
+            initial_misfit = obj.get_current_total_misfit(); % 读取已计算的总二范数
+            previous_misfit = initial_misfit;
             all_misfits = zeros(obj.max_iterations + 1, 1);
-            all_misfits(1) = initial_misfit;         % 存储初始目标函数值
+            all_misfits(1) = initial_misfit;
             
             % 2. 主迭代循环
             for iter = 1:obj.max_iterations
                 % 2.1 打印当前迭代信息
                 fprintf('\n=== 第 %d/%d 次迭代 ===\n', iter, obj.max_iterations);
                 
-                % 2.2 计算当前模型的梯度
+                % 2.2 计算当前模型的梯度（这步会同时计算新的残差和二范数）
                 total_gradient = obj.compute_total_gradient();
                 obj.save_iteration_gradient(total_gradient, iter);
                 
@@ -84,8 +85,8 @@ classdef GradientDescentOptimizer < BaseOptimizer
                 % 2.4 更新模型参数
                 obj.update_model_with_step(total_gradient, step);
                 
-                % 2.5 计算更新后的目标函数值
-                current_misfit = obj.compute_misfit();
+                % 2.5 获取更新后的目标函数值（直接读取，不重新计算）
+                current_misfit = obj.get_current_total_misfit();
                 all_misfits(iter + 1) = current_misfit;
                 
                 % 2.6 计算并打印改进程度
@@ -126,9 +127,6 @@ classdef GradientDescentOptimizer < BaseOptimizer
         
         function step = compute_step_length(obj, total_gradient, current_misfit)
             % 使用抛物线法计算最优步长
-            % 输入参数：
-            %   total_gradient: 当前迭代的总梯度
-            %   current_misfit: 当前的目标函数值
             
             % 1. 设置测试步长
             step1 = 0.1;  % 第一个测试步长
@@ -142,12 +140,16 @@ classdef GradientDescentOptimizer < BaseOptimizer
             
             % 4. 测试step1
             obj.update_model_with_step(total_gradient, step1);
-            misfit1 = obj.compute_misfit();
+            % 只计算残差和二范数，不计算梯度
+            obj.gradient_solver.adjoint_solver.compute_residuals_all_shots();
+            misfit1 = obj.get_current_total_misfit();
             
             % 5. 测试step2
             obj.set_current_model(current_model);  % 恢复原始模型
             obj.update_model_with_step(total_gradient, step2);
-            misfit2 = obj.compute_misfit();
+            % 只计算残差和二范数，不计算梯度
+            obj.gradient_solver.adjoint_solver.compute_residuals_all_shots();
+            misfit2 = obj.get_current_total_misfit();
             
             % 6. 使用抛物线拟合计算最优步长
             % f(α) ≈ aα² + bα + c
