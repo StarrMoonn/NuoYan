@@ -36,7 +36,7 @@ mex compute_wave_propagation_omp.cpp COMPFLAGS="/openmp $COMPFLAGS"
 ## 4. GCD 并行版本
 使用 Apple 的 Grand Central Dispatch 进行并行计算：
 
-mex -v -O -largeArrayDims LDFLAGS='\$LDFLAGS -framework Foundation -framework CoreFoundation' compute_wave_propagation_gcd.cpp
+mex -O -largeArrayDims LDFLAGS='\$LDFLAGS -framework Foundation -framework CoreFoundation' compute_wave_propagation_gcd.cpp
 
 - 输出文件：
   - macOS: `compute_wave_propagation_gcd.mexmaca64`
