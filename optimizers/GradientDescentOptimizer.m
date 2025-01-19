@@ -75,38 +75,38 @@ classdef GradientDescentOptimizer < BaseOptimizer
                 % 2.1 打印当前迭代信息
                 fprintf('\n=== 第 %d/%d 次迭代 ===\n', iter, obj.max_iterations);
                 
-                % 2.2 计算当前模型的梯度（这步会同时计算新的残差和二范数）
-                total_gradient = obj.compute_total_gradient();
-                obj.save_iteration_gradient(total_gradient, iter);
-                
-                % 2.3 使用抛物线法计算最优步长
+                % 2.2 使用抛物线法计算最优步长
                 step = obj.compute_step_length(total_gradient, previous_misfit);
                 
-                % 2.4 更新模型参数
+                % 2.3 更新模型参数
                 obj.update_model_with_step(total_gradient, step);
                 
-                % 2.5 获取更新后的目标函数值（直接读取，不重新计算）
+                % 2.4 获取更新后的目标函数值（直接读取，不重新计算）
                 current_misfit = obj.get_current_total_misfit();
                 all_misfits(iter + 1) = current_misfit;
                 
-                % 2.6 计算并打印改进程度
+                % 2.5 计算并打印改进程度
                 [total_improvement, iter_improvement] = obj.compute_improvements(...
                     initial_misfit, previous_misfit, current_misfit);
                 fprintf('当前残差值: %e\n', current_misfit);
                 fprintf('总体改进效果: %.2f%%\n', total_improvement);
                 fprintf('本次迭代改进: %.2f%%\n', iter_improvement);
                 
-                % 2.7 保存当前迭代结果
+                % 2.6 保存当前迭代结果
                 obj.save_iteration_results(current_misfit, total_improvement, iter_improvement, iter);
                 
-                % 2.8 检查收敛条件
+                % 2.7 检查收敛条件
                 if abs(iter_improvement) < obj.tolerance
                     fprintf('\n=== 已收敛，停止迭代 ===\n');
                     break;
                 end
                 
-                % 2.9 更新上一次迭代的目标函数值
+                % 2.8 更新上一次迭代的目标函数值
                 previous_misfit = current_misfit;
+                
+                % 2.9 重新计算梯度以便于下一次迭代
+                total_gradient = obj.compute_total_gradient();  % 这里重新计算梯度
+                obj.save_iteration_gradient(total_gradient, iter); % 保存当前迭代的总梯度
             end
             
             % 3. 绘制收敛曲线
