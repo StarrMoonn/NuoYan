@@ -99,7 +99,7 @@ classdef VTI_Adjoint < handle
             % 设置输出目录
             current_dir = fileparts(fileparts(mfilename('fullpath')));
             obj.adjoint_output_dir = fullfile(current_dir, 'data', 'output', 'wavefield', 'adjoint');
-            obj.misfit_output_dir = fullfile(current_dir, 'data', 'output', 'fwi_misfit');
+            obj.misfit_output_dir = fullfile(current_dir, 'data', 'output', 'fwi', 'fwi_misfit');
             
             % 创建必要的目录
             if ~exist(obj.adjoint_output_dir, 'dir')
@@ -138,16 +138,16 @@ classdef VTI_Adjoint < handle
             % 清理内存
             clear shot_misfit;
             
-            % 输出单炮的残差值
-            fprintf('残差 vx 最大值: %e\n', max(abs(obj.current_residuals_vx(:))));
-            fprintf('残差 vy 最大值: %e\n\n', max(abs(obj.current_residuals_vy(:))));
+            % % 输出单炮的残差值
+            % fprintf('残差 vx 最大值: %e\n', max(abs(obj.current_residuals_vx(:))));
+            % fprintf('残差 vy 最大值: %e\n\n', max(abs(obj.current_residuals_vy(:))));
             
-            fprintf('检波器残差统计：\n');
-            for irec = 1:obj.NREC
-                fprintf('检波器%d: vx残差=%e, vy残差=%e\n', ...
-                    irec, max(abs(obj.current_residuals_vx(:,irec))), ...
-                    max(abs(obj.current_residuals_vy(:,irec))));
-            end
+            % fprintf('检波器残差统计：\n');
+            % for irec = 1:obj.NREC
+            %     fprintf('检波器%d: vx残差=%e, vy残差=%e\n', ...
+            %         irec, max(abs(obj.current_residuals_vx(:,irec))), ...
+            %         max(abs(obj.current_residuals_vy(:,irec))));
+            % end
         end
         
         % 3. 计算单炮伴随波场   
