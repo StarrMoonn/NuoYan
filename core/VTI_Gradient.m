@@ -145,9 +145,9 @@ classdef VTI_Gradient < handle
             gradient_c44 = zeros(NX, NY);
             gradient_rho = zeros(NX, NY);
             
-            % 添加波场能量监控数组
-            forward_energy = zeros(NT,1);
-            adjoint_energy = zeros(NT,1);
+            % % 添加波场能量监控数组
+            % forward_energy = zeros(NT,1);
+            % adjoint_energy = zeros(NT,1);
             
             % 添加调试信息
             fprintf('开始波场互相关计算:\n');
@@ -162,9 +162,9 @@ classdef VTI_Gradient < handle
                 adj_vx = adjoint_wavefield.vx(:,:,it);
                 adj_vy = adjoint_wavefield.vy(:,:,it);
                 
-                % 计算波场能量
-                forward_energy(it) = sum(sum(fwd_vx.^2 + fwd_vy.^2));
-                adjoint_energy(it) = sum(sum(adj_vx.^2 + adj_vy.^2));
+                % % 计算波场能量
+                % forward_energy(it) = sum(sum(fwd_vx.^2 + fwd_vy.^2));
+                % adjoint_energy(it) = sum(sum(adj_vx.^2 + adj_vy.^2));
                 
                 % 计算应变率
                 [dvx_dx, dvx_dy] = obj.compute_gradient(fwd_vx);
@@ -199,8 +199,8 @@ classdef VTI_Gradient < handle
                 % 每100步输出一次信息
                 if mod(it, 100) == 0
                     fprintf('时间步 %d:\n', it);
-                    fprintf('正演波场能量: %e\n', forward_energy(it));
-                    fprintf('伴随波场能量: %e\n', adjoint_energy(it));
+                    % fprintf('正演波场能量: %e\n', forward_energy(it));
+                    % fprintf('伴随波场能量: %e\n', adjoint_energy(it));
                     fprintf('C11最大梯度: %e\n', max(abs(gradient_c11(:))));
                     fprintf('C13最大梯度: %e\n', max(abs(gradient_c13(:))));
                     fprintf('C33最大梯度: %e\n', max(abs(gradient_c33(:))));
@@ -209,14 +209,14 @@ classdef VTI_Gradient < handle
                 end
             end
             
-            % 绘制并保存波场能量曲线
-            figure;
-            plot(1:NT, forward_energy, 'b-', 1:NT, adjoint_energy, 'r--');
-            legend('正演波场能量', '伴随波场能量');
-            xlabel('时间步');
-            ylabel('波场能量');
-            title('波场能量随时间变化');
-            savefig(fullfile(obj.gradient_output_dir, 'wavefield_energy.fig'));
+            % % 绘制并保存波场能量曲线
+            % figure;
+            % plot(1:NT, forward_energy, 'b-', 1:NT, adjoint_energy, 'r--');
+            % legend('正演波场能量', '伴随波场能量');
+            % xlabel('时间步');
+            % ylabel('波场能量');
+            % title('波场能量随时间变化');
+            % savefig(fullfile(obj.gradient_output_dir, 'wavefield_energy.fig'));
             
             % 组合所有参数的梯度
             gradient = struct('c11', gradient_c11, ...
