@@ -63,6 +63,7 @@ classdef BaseOptimizer < handle
         tolerance             % 收敛容差
         output_dir            % 输出目录
         misfit_output_dir     % 残差输出目录
+        gradient_output_dir   % 梯度输出目录
         nshots              % 炮数
     end
     
@@ -90,14 +91,15 @@ classdef BaseOptimizer < handle
             
             % 设置输出目录（使用本地获取的project_root）
             obj.output_dir = fullfile(project_root, 'data', 'output', 'fwi');
-            obj.misfit_output_dir = fullfile(project_root, 'data', 'output', 'fwi_misfit');
+            obj.misfit_output_dir = fullfile(project_root, 'data', 'output', 'fwi', 'fwi_misfit');
+            obj.gradient_output_dir = fullfile(project_root, 'data', 'output', 'fwi', 'fwi_gradient');
             
-            % 创建必要的目录
-            if ~exist(obj.output_dir, 'dir')
-                mkdir(obj.output_dir);
-            end
-            if ~exist(obj.misfit_output_dir, 'dir')
-                mkdir(obj.misfit_output_dir);
+            % 创建必要的输出目录
+            output_dirs = {obj.output_dir, obj.misfit_output_dir, obj.gradient_output_dir};
+            for i = 1:length(output_dirs)
+                if ~exist(output_dirs{i}, 'dir')
+                    mkdir(output_dirs{i});
+                end
             end
         end
         
