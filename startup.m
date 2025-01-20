@@ -3,3 +3,4 @@ project_root = fileparts(mfilename('fullpath'));
 addpath(genpath(fullfile(project_root, 'core')));
 addpath(genpath(fullfile(project_root, 'mex')));
 addpath(genpath(fullfile(project_root, 'unit_test'))); 
+addpath(genpath(fullfile(project_root, 'optimizers'))); 

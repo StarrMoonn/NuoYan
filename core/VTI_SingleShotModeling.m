@@ -138,6 +138,9 @@ classdef VTI_SingleShotModeling < handle
             % 开始计时
             shot_time_start = tic;
             
+            % 更新当前炮号
+            obj.fd_solver.set_current_shot(ishot);
+            
             % 设置PML边界
             obj.fd_solver.setup_pml_boundary();
             obj.fd_solver.setup_pml_boundary_x();

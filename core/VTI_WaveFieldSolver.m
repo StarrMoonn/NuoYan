@@ -681,5 +681,9 @@ classdef VTI_WaveFieldSolver < handle
             obj.memory_dsigmaxy_dx = zeros(obj.NX, obj.NY);
             obj.memory_dsigmaxy_dy = zeros(obj.NX, obj.NY);
         end
+        
+        function set_current_shot(obj, ishot)
+            obj.current_shot_number = ishot;
+        end
     end
 end 
