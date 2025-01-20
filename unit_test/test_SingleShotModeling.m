@@ -54,7 +54,7 @@ try
     end
     
     % 4. 执行正演计算
-    ishot = 2;  % 当前炮号
+    ishot = 1;  % 当前炮号
     fprintf('\n=== 开始第 %d 炮正演模拟 ===\n', ishot);
     tic;
     [vx_data, vy_data, complete_wavefield] = forward_solver.forward_modeling_single_shot(ishot);

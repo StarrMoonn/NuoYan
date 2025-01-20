@@ -64,7 +64,6 @@ classdef BaseOptimizer < handle
         output_dir            % 输出目录
         misfit_output_dir     % 残差输出目录
         gradient_output_dir   % 梯度输出目录
-        nshots              % 炮数
     end
     
     methods (Abstract)
@@ -80,9 +79,6 @@ classdef BaseOptimizer < handle
             % 设置默认参数
             obj.max_iterations = 50;  % 默认最大迭代次数
             obj.tolerance = 0.1;      % 默认收敛容差
-            
-            % 获取炮数
-            obj.nshots = params.syn_params.NSHOT;
             
             % 获取当前脚本的路径
             [script_path, ~, ~] = fileparts(mfilename('fullpath'));
@@ -103,10 +99,14 @@ classdef BaseOptimizer < handle
             end
         end
         
+        function nshots = get_nshots(obj)
+            % 直接从配置中获取炮数
+            nshots = obj.gradient_solver.adjoint_solver.syn_params.NSHOT;
+        end
+        
         %% === 总梯度值和总误差函数===    
         function total_gradient = compute_total_gradient(obj)
-            % 计算所有炮的总梯度
-            nshots = obj.nshots;
+            nshots = obj.get_nshots();
             nx = obj.gradient_solver.adjoint_solver.syn_params.NX;
             ny = obj.gradient_solver.adjoint_solver.syn_params.NY;
             
@@ -152,7 +152,7 @@ classdef BaseOptimizer < handle
 
         function misfit = get_current_total_misfit(obj)
             % 直接从硬盘读取已计算的二范数（不重新计算）
-            nshots = obj.nshots;
+            nshots = obj.get_nshots();
             misfit = 0;
             
             fprintf('\n=== 读取总目标函数值 ===\n');
