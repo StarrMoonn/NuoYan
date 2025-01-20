@@ -109,7 +109,7 @@ classdef VTI_WaveFieldSolver < handle
         b_y_half
         
         % 计算模式
-        compute_kernel    % 'cpu' 或 'cpu_mex' 或 'cuda_mex'
+        compute_kernel    % 'cpu' 或 'cpu_mex' 或 'cuda_mex'或'SIMD'
     end
     
     methods
@@ -598,6 +598,8 @@ classdef VTI_WaveFieldSolver < handle
                     [obj.vx, obj.vy] = utils.compute_wave_propagation_cpu2(obj);  % 普通C++ 
                 case 'openMP'
                     [obj.vx, obj.vy] = utils.compute_wave_propagation_cpu3(obj);  % OpenMP并行
+                case 'SIMD'
+                    [obj.vx, obj.vy] = utils.compute_wave_propagation_cpu4(obj);  % SIMD+OpenMP优化
                 otherwise
                     error('Unknown compute kernel type: %s', obj.compute_kernel);
             end
