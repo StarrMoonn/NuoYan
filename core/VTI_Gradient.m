@@ -111,23 +111,19 @@ classdef VTI_Gradient < handle
                 
             finally
                 % 清理内存
-                % 1. 清除波场
-                if exist('forward_wavefield', 'var')
-                    clear forward_wavefield;
-                end
+                % 1. 清除波场和梯度相关变量
                 if exist('adjoint_wavefield', 'var')
                     clear adjoint_wavefield;
                 end
                 
-                % 2. 清除所有梯度相关变量
                 if exist('gradient', 'var')
                     clear gradient gradient_c11 gradient_c13 gradient_c33 gradient_c44 gradient_rho;
                 end
                 
-                % 3. 清除adjoint_solver中的临时波场
+                % 2. 清除adjoint_solver中的临时波场
                 obj.adjoint_solver.current_forward_wavefield = [];
                 
-                % 4. 强制垃圾回收
+                % 3. 强制垃圾回收（可选）
                 %gc = java.lang.System.gc();
             end
             
