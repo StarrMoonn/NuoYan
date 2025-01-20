@@ -99,7 +99,7 @@ params.IT_DISPLAY = 100;
 % 计算模式：'cpu' or 'cpu_mex' or 'openMP'
 %params.compute_kernel = 'cpu_mex';  
 params.compute_kernel = 'openMP';  
-% params.compute_kernel = 'cpu'; 
+%params.compute_kernel = 'cpu'; 
 
 fprintf('\n=== 创建VTI_WaveFieldSolver实例并初始化 ===\n');
 % 1. 创建实例
@@ -110,13 +110,7 @@ vti_model.setup_pml_boundary();
 vti_model.setup_pml_boundary_x();
 vti_model.setup_pml_boundary_y();
 
-% % 3. 重新设置震源位置（确保位置正确）
-% vti_model.ISOURCE = params.ISOURCE;
-% vti_model.JSOURCE = params.JSOURCE;
-% vti_model.xsource = (vti_model.JSOURCE - 1) * vti_model.DELTAX;
-% vti_model.ysource = (vti_model.ISOURCE - 1) * vti_model.DELTAY;
-
-% 4. 重置波场
+% 3. 重置波场
 vti_model.reset_fields();
 
 fprintf('\n=== 初始参数 ===\n');

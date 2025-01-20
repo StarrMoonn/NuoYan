@@ -20,89 +20,105 @@ void compute_wave_propagation_gcd(
     const double inv_dx = 1.0 / DELTAX;
     const double inv_dy = 1.0 / DELTAY;
 
-    // 计算应力场 sigmaxx 和 sigmayy
-    dispatch_apply(NY - 1, dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^(size_t j_idx) {
-        int j = j_idx + 1;  // 修正索引，使 j 从 1 到 NY-1
-        for (int i = 0; i < NX - 1; i++) {
-            double value_dvx_dx = (vx[(i + 1) + j * NX] - vx[i + j * NX]) * inv_dx;
-            double value_dvy_dy = (vy[i + j * NX] - vy[i + (j - 1) * NX]) * inv_dy;
+    // 创建一个串行队列来确保步骤顺序
+    dispatch_queue_t serial_queue = dispatch_queue_create("com.wave.serial", DISPATCH_QUEUE_SERIAL);
+    // 创建一个并行队列来执行并行计算
+    dispatch_queue_t parallel_queue = dispatch_queue_create("com.wave.parallel", DISPATCH_QUEUE_CONCURRENT);
+    
+    dispatch_sync(serial_queue, ^{
+        // 第一步：计算应力场 sigmaxx 和 sigmayy
+        dispatch_apply(NY - 1, parallel_queue, ^(size_t j_idx) {
+            int j = j_idx + 1;  // 修正索引，使 j 从 1 到 NY-1
+            for (int i = 0; i < NX - 1; i++) {
+                double value_dvx_dx = (vx[(i + 1) + j * NX] - vx[i + j * NX]) * inv_dx;
+                double value_dvy_dy = (vy[i + j * NX] - vy[i + (j - 1) * NX]) * inv_dy;
 
-            memory_dvx_dx[i + j * NX] = b_x_half[i] * memory_dvx_dx[i + j * NX] + 
-                                       a_x_half[i] * value_dvx_dx;
-            memory_dvy_dy[i + j * NX] = b_y[j] * memory_dvy_dy[i + j * NX] + 
-                                       a_y[j] * value_dvy_dy;
+                memory_dvx_dx[i + j * NX] = b_x_half[i] * memory_dvx_dx[i + j * NX] + 
+                                           a_x_half[i] * value_dvx_dx;
+                memory_dvy_dy[i + j * NX] = b_y[j] * memory_dvy_dy[i + j * NX] + 
+                                           a_y[j] * value_dvy_dy;
 
-            value_dvx_dx = value_dvx_dx / K_x_half[i] + memory_dvx_dx[i + j * NX];
-            value_dvy_dy = value_dvy_dy / K_y[j] + memory_dvy_dy[i + j * NX];
+                value_dvx_dx = value_dvx_dx / K_x_half[i] + memory_dvx_dx[i + j * NX];
+                value_dvy_dy = value_dvy_dy / K_y[j] + memory_dvy_dy[i + j * NX];
 
-            sigmaxx[i + j * NX] += DELTAT * (
-                c11[i + j * NX] * value_dvx_dx + 
-                c13[i + j * NX] * value_dvy_dy
-            );
-            
-            sigmayy[i + j * NX] += DELTAT * (
-                c13[i + j * NX] * value_dvx_dx + 
-                c33[i + j * NX] * value_dvy_dy
-            );
-        }
+                sigmaxx[i + j * NX] += DELTAT * (
+                    c11[i + j * NX] * value_dvx_dx + 
+                    c13[i + j * NX] * value_dvy_dy
+                );
+                
+                sigmayy[i + j * NX] += DELTAT * (
+                    c13[i + j * NX] * value_dvx_dx + 
+                    c33[i + j * NX] * value_dvy_dy
+                );
+            }
+        });
     });
 
-    // 计算剪应力 sigmaxy
-    dispatch_apply(NY - 1, dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^(size_t j_idx) {
-        int j = j_idx;  // j 从 0 到 NY-2
-        for (int i = 1; i < NX; i++) {
-            double value_dvy_dx = (vy[i + j * NX] - vy[(i - 1) + j * NX]) * inv_dx;
-            double value_dvx_dy = (vx[i + (j + 1) * NX] - vx[i + j * NX]) * inv_dy;
+    dispatch_sync(serial_queue, ^{
+        // 第二步：计算剪应力 sigmaxy
+        dispatch_apply(NY - 1, parallel_queue, ^(size_t j_idx) {
+            int j = j_idx;  // j 从 0 到 NY-2
+            for (int i = 1; i < NX; i++) {
+                double value_dvy_dx = (vy[i + j * NX] - vy[(i - 1) + j * NX]) * inv_dx;
+                double value_dvx_dy = (vx[i + (j + 1) * NX] - vx[i + j * NX]) * inv_dy;
 
-            memory_dvy_dx[i + j * NX] = b_x[i] * memory_dvy_dx[i + j * NX] + 
-                                       a_x[i] * value_dvy_dx;
-            memory_dvx_dy[i + j * NX] = b_y_half[j] * memory_dvx_dy[i + j * NX] + 
-                                       a_y_half[j] * value_dvx_dy;
+                memory_dvy_dx[i + j * NX] = b_x[i] * memory_dvy_dx[i + j * NX] + 
+                                           a_x[i] * value_dvy_dx;
+                memory_dvx_dy[i + j * NX] = b_y_half[j] * memory_dvx_dy[i + j * NX] + 
+                                           a_y_half[j] * value_dvx_dy;
 
-            value_dvy_dx = value_dvy_dx / K_x[i] + memory_dvy_dx[i + j * NX];
-            value_dvx_dy = value_dvx_dy / K_y_half[j] + memory_dvx_dy[i + j * NX];
+                value_dvy_dx = value_dvy_dx / K_x[i] + memory_dvy_dx[i + j * NX];
+                value_dvx_dy = value_dvx_dy / K_y_half[j] + memory_dvx_dy[i + j * NX];
 
-            sigmaxy[i + j * NX] += c44[i + j * NX] * (value_dvy_dx + value_dvx_dy) * DELTAT;
-        }
+                sigmaxy[i + j * NX] += c44[i + j * NX] * (value_dvy_dx + value_dvx_dy) * DELTAT;
+            }
+        });
     });
 
     // 计算 x 方向速度场
-    dispatch_apply(NY - 1, dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^(size_t j_idx) {
-        int j = j_idx + 1;  // j 从 1 到 NY-1
-        for (int i = 1; i < NX; i++) {
-            double value_dsigmaxx_dx = (sigmaxx[i + j * NX] - sigmaxx[(i - 1) + j * NX]) * inv_dx;
-            double value_dsigmaxy_dy = (sigmaxy[i + j * NX] - sigmaxy[i + (j - 1) * NX]) * inv_dy;
+    dispatch_sync(serial_queue, ^{
+        dispatch_apply(NY - 1, parallel_queue, ^(size_t j_idx) {
+            int j = j_idx + 1;  // j 从 1 到 NY-1
+            for (int i = 1; i < NX; i++) {
+                double value_dsigmaxx_dx = (sigmaxx[i + j * NX] - sigmaxx[(i - 1) + j * NX]) * inv_dx;
+                double value_dsigmaxy_dy = (sigmaxy[i + j * NX] - sigmaxy[i + (j - 1) * NX]) * inv_dy;
 
-            memory_dsigmaxx_dx[i + j * NX] = b_x[i] * memory_dsigmaxx_dx[i + j * NX] + 
-                                            a_x[i] * value_dsigmaxx_dx;
-            memory_dsigmaxy_dy[i + j * NX] = b_y[j] * memory_dsigmaxy_dy[i + j * NX] + 
-                                            a_y[j] * value_dsigmaxy_dy;
+                memory_dsigmaxx_dx[i + j * NX] = b_x[i] * memory_dsigmaxx_dx[i + j * NX] + 
+                                                a_x[i] * value_dsigmaxx_dx;
+                memory_dsigmaxy_dy[i + j * NX] = b_y[j] * memory_dsigmaxy_dy[i + j * NX] + 
+                                                a_y[j] * value_dsigmaxy_dy;
 
-            value_dsigmaxx_dx = value_dsigmaxx_dx / K_x[i] + memory_dsigmaxx_dx[i + j * NX];
-            value_dsigmaxy_dy = value_dsigmaxy_dy / K_y[j] + memory_dsigmaxy_dy[i + j * NX];
+                value_dsigmaxx_dx = value_dsigmaxx_dx / K_x[i] + memory_dsigmaxx_dx[i + j * NX];
+                value_dsigmaxy_dy = value_dsigmaxy_dy / K_y[j] + memory_dsigmaxy_dy[i + j * NX];
 
-            vx[i + j * NX] += (value_dsigmaxx_dx + value_dsigmaxy_dy) * DELTAT / rho[i + j * NX];
-        }
+                vx[i + j * NX] += (value_dsigmaxx_dx + value_dsigmaxy_dy) * DELTAT / rho[i + j * NX];
+            }
+        });
     });
 
     // 计算 y 方向速度场
-    dispatch_apply(NY - 1, dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^(size_t j_idx) {
-        int j = j_idx;  // j 从 0 到 NY-2
-        for (int i = 0; i < NX - 1; i++) {
-            double value_dsigmaxy_dx = (sigmaxy[(i + 1) + j * NX] - sigmaxy[i + j * NX]) * inv_dx;
-            double value_dsigmayy_dy = (sigmayy[i + (j + 1) * NX] - sigmayy[i + j * NX]) * inv_dy;
+    dispatch_sync(serial_queue, ^{
+        dispatch_apply(NY - 1, parallel_queue, ^(size_t j_idx) {
+            int j = j_idx;  // j 从 0 到 NY-2
+            for (int i = 0; i < NX - 1; i++) {
+                double value_dsigmaxy_dx = (sigmaxy[(i + 1) + j * NX] - sigmaxy[i + j * NX]) * inv_dx;
+                double value_dsigmayy_dy = (sigmayy[i + (j + 1) * NX] - sigmayy[i + j * NX]) * inv_dy;
 
-            memory_dsigmaxy_dx[i + j * NX] = b_x_half[i] * memory_dsigmaxy_dx[i + j * NX] + 
-                                            a_x_half[i] * value_dsigmaxy_dx;
-            memory_dsigmayy_dy[i + j * NX] = b_y_half[j] * memory_dsigmayy_dy[i + j * NX] + 
-                                            a_y_half[j] * value_dsigmayy_dy;
+                memory_dsigmaxy_dx[i + j * NX] = b_x_half[i] * memory_dsigmaxy_dx[i + j * NX] + 
+                                                a_x_half[i] * value_dsigmaxy_dx;
+                memory_dsigmayy_dy[i + j * NX] = b_y_half[j] * memory_dsigmayy_dy[i + j * NX] + 
+                                                a_y_half[j] * value_dsigmayy_dy;
 
-            value_dsigmaxy_dx = value_dsigmaxy_dx / K_x_half[i] + memory_dsigmaxy_dx[i + j * NX];
-            value_dsigmayy_dy = value_dsigmayy_dy / K_y_half[j] + memory_dsigmayy_dy[i + j * NX];
+                value_dsigmaxy_dx = value_dsigmaxy_dx / K_x_half[i] + memory_dsigmaxy_dx[i + j * NX];
+                value_dsigmayy_dy = value_dsigmayy_dy / K_y_half[j] + memory_dsigmayy_dy[i + j * NX];
 
-            vy[i + j * NX] += (value_dsigmaxy_dx + value_dsigmayy_dy) * DELTAT / rho[i + j * NX];
-        }
+                vy[i + j * NX] += (value_dsigmaxy_dx + value_dsigmayy_dy) * DELTAT / rho[i + j * NX];
+            }
+        });
     });
+
+    dispatch_release(serial_queue);
+    dispatch_release(parallel_queue);
 }
 
 extern "C" void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]) {

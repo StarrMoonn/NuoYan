@@ -593,12 +593,11 @@ classdef VTI_WaveFieldSolver < handle
         function compute_wave_propagation(obj)
             switch obj.compute_kernel
                 case 'cpu'
-                    [obj.vx, obj.vy] = utils.compute_wave_propagation_cpu1(obj);  % 遍历 CPU实现
+                    [obj.vx, obj.vy] = utils.compute_wave_propagation_cpu1(obj);  % 低性能遍历 
                 case 'cpu_mex'
-                    [obj.vx, obj.vy] = utils.compute_wave_propagation_cpu2(obj);  % C++ CPU实现
+                    [obj.vx, obj.vy] = utils.compute_wave_propagation_cpu2(obj);  % 普通C++ 
                 case 'openMP'
-                    [obj.vx, obj.vy] = utils.compute_wave_propagation_cpu3(obj);  % GCD 并行实现
-                    %obj.compute_wave_propagation_cpu3();  % 遍历 CPU实现
+                    [obj.vx, obj.vy] = utils.compute_wave_propagation_cpu3(obj);  % OpenMP并行
                 otherwise
                     error('Unknown compute kernel type: %s', obj.compute_kernel);
             end
