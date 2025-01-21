@@ -74,18 +74,27 @@ classdef BaseOptimizer < handle
     methods
         function obj = BaseOptimizer(params)
             % 创建梯度计算实例
-            obj.gradient_solver = VTI_Gradient(params);  % 使用VTI_Gradient类
+            obj.gradient_solver = VTI_Gradient(params);
             
-            % 设置默认参数
-            obj.max_iterations = 50;  % 默认最大迭代次数
-            obj.tolerance = 0.1;      % 默认收敛容差
+            % 设置默认参数，并检查 JSON 中是否有指定值
+            if isfield(params, 'max_iterations')
+                obj.max_iterations = params.max_iterations;  % 使用 JSON 中的值
+            else
+                obj.max_iterations = 50;                    % 使用默认值
+            end
+            
+            if isfield(params, 'tolerance')
+                obj.tolerance = params.tolerance;           % 使用 JSON 中的值
+            else
+                obj.tolerance = 0.1;                       % 使用默认值
+            end
             
             % 获取当前脚本的路径
             [script_path, ~, ~] = fileparts(mfilename('fullpath'));
             % 设置项目根目录为当前脚本的上级目录
             project_root = fileparts(script_path);
             
-            % 设置输出目录（使用本地获取的project_root）
+            % 设置输出目录
             obj.output_dir = fullfile(project_root, 'data', 'output', 'fwi');
             obj.misfit_output_dir = fullfile(project_root, 'data', 'output', 'fwi', 'fwi_misfit');
             obj.gradient_output_dir = fullfile(project_root, 'data', 'output', 'fwi', 'fwi_gradient');
