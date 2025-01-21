@@ -93,15 +93,25 @@ classdef VTI_Adjoint < handle
             obj.DELTAT = obj.syn_params.DELTAT;
             
             % 设置波场快照相关的默认参数
-            obj.save_adjoint_snapshots = true;
-            obj.snapshot_interval = 100;
+            obj.save_adjoint_snapshots = true;  % 默认值
+            obj.snapshot_interval = 100;        % 默认值
             
-            % 设置输出目录
+            % 从 JSON 的嵌套结构体中读取参数
+            if isfield(params, 'adjoint_params')
+                if isfield(params.adjoint_params, 'save_adjoint_snapshots')
+                    obj.save_adjoint_snapshots = params.adjoint_params.save_adjoint_snapshots;
+                end
+                
+                if isfield(params.adjoint_params, 'snapshot_interval')
+                    obj.snapshot_interval = params.adjoint_params.snapshot_interval;
+                end
+            end
+
+            % 使用默认输出目录
             current_dir = fileparts(fileparts(mfilename('fullpath')));
             obj.adjoint_output_dir = fullfile(current_dir, 'data', 'output', 'wavefield', 'adjoint');
-            obj.misfit_output_dir = fullfile(current_dir, 'data', 'output', 'fwi', 'fwi_misfit');
             
-            % 创建必要的目录
+            % 设置输出目录
             if ~exist(obj.adjoint_output_dir, 'dir')
                 mkdir(obj.adjoint_output_dir);
             end
