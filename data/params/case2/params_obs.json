@@ -66,13 +66,12 @@
 
     "adjoint_params": {
         "save_adjoint_snapshots": true,
-        "snapshot_interval": 100,
-        "adjoint_output_dir": "output/adjoint_snapshots"
+        "snapshot_interval": 100
     },
 
     "// FWI参数设置": null,
-    "optimization": "gradient_descent",
-    "max_iterations": 20,
+    "optimization": "LBFGS",
+    "max_iterations": 2,
     "tolerance": 0.1,
 
     "// BB优化器参数": null,
