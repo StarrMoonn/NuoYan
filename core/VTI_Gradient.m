@@ -4,30 +4,28 @@
 % 说明：
 %   1. 主要功能：
 %      - 计算单炮梯度
-%      - 基于速度场的梯度计算
-%      - 基于位移场的梯度计算（可选）
 %      - 弹性参数(c11,c13,c33,c44)和密度的梯度计算
 %   2. 计算方法：
-%      - 速度场方法：直接使用速度场计算应变率
-%      - 位移场方法：通过时间积分获得位移场
-%      - 空间导数计算支持二阶和四阶差分
+%      - 基于速度场的梯度计算（主要方法）
+%      - 基于位移场的梯度计算（可选验证方法）
+%      - 二阶/四阶中心差分计算空间导数
 %      - 时间导数采用中心差分（边界使用单侧差分）
 %
 % 类属性：
-%   - adjoint_solver: 伴随波场求解器实例（包含正演求解器）
+%   - adjoint_solver: 伴随波场求解器实例
 %   - gradient_output_dir: 梯度输出目录
 %   - NSTEP: 时间步数
 %
 % 主要方法：
-%   1. 基础方法：
+%   1. 构造函数：
+%      - VTI_Gradient(params): 初始化梯度计算器
+%   2. 梯度计算：
 %      - compute_single_shot_gradient: 计算单炮梯度
-%      - compute_gradient: 计算空间导数
+%      - compute_vti_gradient: 基于速度场计算梯度（调用MEX）
+%      - correlate_wavefields_displacement: 基于位移场计算梯度（验证用）
+%   3. 辅助功能：
 %      - save_gradient: 保存梯度结果
-%   2. 速度场相关方法：
-%      - correlate_wavefields: 基于速度场的波场互相关
-%   3. 位移场相关方法：
 %      - velocity_to_displacement: 速度场转位移场
-%      - correlate_wavefields_displacement: 基于位移场的波场互相关
 %
 % 梯度计算公式：
 %   速度场方法：
@@ -37,33 +35,35 @@
 %   - c44梯度：-(∂vx/∂y + ∂vy/∂x) * (∂v†x/∂y + ∂v†y/∂x)
 %   - ρ梯度：-v†i * ∂²vi/∂t²
 %
-%   位移场方法：
-%   类似公式，但使用位移场u替代速度场v
-%
-% 空间导数计算：
-%   支持两种方法：
-%   1. 二阶中心差分（使用MATLAB gradient函数）
-%   2. 四阶中心差分（自定义实现）
-%
-% 时间积分方法：
-%   位移场计算采用改进的梯形法则：
-%   u(t+dt) = u(t) + (v(t) + v(t+dt))*dt/2
+% 优化说明：
+%   1. MEX加速：
+%      - 使用C++编写核心计算代码
+%      - OpenMP并行优化
+%      - SIMD向量化优化
+%   2. 内存管理：
+%      - 自动清理临时变量
+%      - 分步释放大型波场数据
 %
 % 依赖项：
-%   - VTI_Adjoint类
-%   - utils.computeGradientField函数（二阶差分）
-%   - utils.computeFourthOrderDiff函数（四阶差分）
+%   - VTI_Adjoint类：提供伴随波场计算
+%   - compute_vti_gradient_omp.cpp：C++实现的梯度计算
+%
+% 输出说明：
+%   - 梯度结构体包含：c11, c13, c33, c44, rho
+%   - 自动保存到指定输出目录
+%   - 支持单炮梯度的独立保存
 %
 % 注意事项：
-%   - 需要正确初始化伴随求解器
-%   - 可以选择速度场或位移场方法
-%   - 可以选择二阶或四阶空间差分
-%   - 注意内存管理（波场数据量较大）
-%   - 时间导数计算中已处理边界条件
+%   1. 内存管理：
+%      - 波场数据量较大，注意及时清理
+%      - 使用try-finally确保资源释放
+%   2. 性能优化：
+%      - 主要计算已移至C++实现
+%      - 保留MATLAB实现用于验证
 %
 % 作者：StarrMoonn
-% 日期：2025-01-16
-%
+% 日期：2025-01-21
+% 
 classdef VTI_Gradient < handle
     properties
         adjoint_solver      % 伴随波场求解器实例
@@ -131,7 +131,7 @@ classdef VTI_Gradient < handle
         end
     end
     
-    %% 速度场梯度计算方法
+    %% 速度场梯度计算函数
     methods 
         function gradient = compute_vti_gradient(obj, forward_wavefield, adjoint_wavefield)
             % 获取时间步长和其他参数
@@ -153,18 +153,6 @@ classdef VTI_Gradient < handle
             end
         end
         
-        function [dx, dy] = compute_gradient(obj, field)
-            % 获取网格间距
-            deltax = obj.adjoint_solver.syn_params.DELTAX;
-            deltay = obj.adjoint_solver.syn_params.DELTAY;
-            
-            % 四阶中心差分计算导数
-            %[dx, dy] = utils.computeFourthOrderDiff(field, deltax, deltay);
-
-            % 二阶中心差分计算导数
-            [dx, dy] = utils.computeGradientField(field, deltax, deltay);
-        end
-
         function save_gradient(obj, gradient, ishot)
             % 验证输入
             if ~isstruct(gradient) || ~all(isfield(gradient, {'c11','c13','c33','c44','rho'}))
@@ -193,9 +181,26 @@ classdef VTI_Gradient < handle
             save(filepath, 'gradient');
             fprintf('梯度已保存到: %s\n', filepath);
         end
+
+  
+%{
+       % 不需要了，已经打包到c++源码中，使用二阶中心差分
+        function [dx, dy] = compute_gradient(obj, field)
+            % 获取网格间距
+            deltax = obj.adjoint_solver.syn_params.DELTAX;
+            deltay = obj.adjoint_solver.syn_params.DELTAY;
+            
+            % 四阶中心差分计算导数
+            %[dx, dy] = utils.computeFourthOrderDiff(field, deltax, deltay);
+
+            % 二阶中心差分计算导数
+            [dx, dy] = utils.computeGradientField(field, deltax, deltay);
+        end 
+%}
+
     end
     
-    %% 位移场梯度计算方法
+    %% 位移场梯度计算函数，验证效果一般。
     methods 
         function [ux, uy] = velocity_to_displacement(~, vx, vy, dt)
             % 速度场转位移场（使用梯形法则积分）
