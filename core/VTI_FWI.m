@@ -27,7 +27,7 @@ classdef VTI_FWI < handle
         function obj = VTI_FWI(params)
             % 初始化优化器
             if ~isfield(params, 'optimization')
-                params.optimization = 'gradient_descent';  % 默认使用梯度下降法
+                params.optimization = 'LBFGS';  % 默认使用LBFGS
             end
             
             % 根据指定方法创建具体的优化器实例
