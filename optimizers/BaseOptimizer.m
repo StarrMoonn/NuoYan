@@ -187,12 +187,12 @@ classdef BaseOptimizer < handle
         end
         
         function set_current_model(obj, model)
-            syn_params = obj.gradient_solver.adjoint_solver.syn_params;
-            syn_params.c11 = model.c11;
-            syn_params.c13 = model.c13;
-            syn_params.c33 = model.c33;
-            syn_params.c44 = model.c44;
-            syn_params.rho = model.rho;
+            % 直接修改对象属性
+            obj.gradient_solver.adjoint_solver.syn_params.c11 = model.c11;
+            obj.gradient_solver.adjoint_solver.syn_params.c13 = model.c13;
+            obj.gradient_solver.adjoint_solver.syn_params.c33 = model.c33;
+            obj.gradient_solver.adjoint_solver.syn_params.c44 = model.c44;
+            obj.gradient_solver.adjoint_solver.syn_params.rho = model.rho;
         end
 
         function [total_improvement, iter_improvement] = compute_improvements(~, initial_misfit, previous_misfit, current_misfit)
