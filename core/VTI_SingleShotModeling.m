@@ -207,5 +207,15 @@ classdef VTI_SingleShotModeling < handle
             obj.fd_solver.xsource = (obj.fd_solver.ISOURCE - 1) * obj.fd_solver.DELTAX;
             obj.fd_solver.ysource = (obj.fd_solver.JSOURCE - 1) * obj.fd_solver.DELTAY;
         end
+        
+        % 添加新方法：更新模型参数
+        function update_model_params(obj, model)
+            % 直接更新波场求解器的模型参数
+            obj.fd_solver.c11 = model.c11;
+            obj.fd_solver.c13 = model.c13;
+            obj.fd_solver.c33 = model.c33;
+            obj.fd_solver.c44 = model.c44;
+            obj.fd_solver.rho = model.rho;
+        end
     end
 end 

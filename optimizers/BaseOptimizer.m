@@ -187,12 +187,15 @@ classdef BaseOptimizer < handle
         end
         
         function set_current_model(obj, model)
-            % 直接修改对象属性
+            % 1. 更新 syn_params
             obj.gradient_solver.adjoint_solver.syn_params.c11 = model.c11;
             obj.gradient_solver.adjoint_solver.syn_params.c13 = model.c13;
             obj.gradient_solver.adjoint_solver.syn_params.c33 = model.c33;
             obj.gradient_solver.adjoint_solver.syn_params.c44 = model.c44;
             obj.gradient_solver.adjoint_solver.syn_params.rho = model.rho;
+            
+            % 2. 更新波场求解器的参数
+            obj.gradient_solver.adjoint_solver.wavefield_solver_syn.update_model_params(model);
         end
 
         function [total_improvement, iter_improvement] = compute_improvements(~, initial_misfit, previous_misfit, current_misfit)

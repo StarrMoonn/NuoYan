@@ -56,6 +56,10 @@
 % 
 
 classdef LBFGSOptimizer < BaseOptimizer
+    properties
+        initial_misfit  % 添加属性存储初始目标函数值
+    end
+
     methods
         function obj = LBFGSOptimizer(params)
             % 调用父类构造函数
@@ -67,6 +71,10 @@ classdef LBFGSOptimizer < BaseOptimizer
             
             % 获取初始模型
             initial_model = obj.get_current_model();
+            x0 = obj.model_to_vector(initial_model);
+            
+            % 计算并保存初始目标函数值
+            obj.initial_misfit = obj.get_current_total_misfit();
             
             % 设置优化选项
             options = optimoptions('fminunc', ...
@@ -74,36 +82,15 @@ classdef LBFGSOptimizer < BaseOptimizer
                 'HessianApproximation', 'lbfgs', ...      % 使用 L-BFGS 方法
                 'MaxIterations', obj.max_iterations, ...  % 主迭代次数
                 'OptimalityTolerance', obj.tolerance, ... % 收敛容差
-                'MaxFunctionEvaluations', 5, ...          % 限制函数评估总次数
+                'MaxFunctionEvaluations', 5, ...          % 函数评估次数限制
                 'StepTolerance', 1e-4, ...                % 步长容差
                 'SpecifyObjectiveGradient', true, ...     % 指定提供梯度
-                'Display', 'iter-detailed', ...           % 显示详细迭代信息
-                'OutputFcn', @outputFunction);            % 添加输出函数
+                'Display', 'iter-detailed');              % 显示详细迭代信息
             
-            % 添加输出函数来显示更多信息
-            function stop = outputFunction(x, optimValues, state)
-                stop = false;
-                switch state
-                    case 'init'
-                        fprintf('开始优化...\n');
-                    case 'iter'
-                        fprintf('当前迭代: %d, 函数评估次数: %d\n', ...
-                            optimValues.iteration, optimValues.funccount);
-                        fprintf('目标函数值: %e\n', optimValues.fval);
-                        fprintf('梯度范数: %e\n', optimValues.firstorderopt);
-                    case 'interrupt'
-                        fprintf('优化被中断\n');
-                    case 'done'
-                        fprintf('优化完成\n');
-                end
-                fprintf('-------------------\n');
-            end
-            
-            % 定义目标函数（返回误差和梯度）
-            eval_count = 0;  % 在函数外部初始化计数器
-            
+            % 定义目标函数
+            eval_count = 0;  % 初始化计数器
             function [f, g] = objective(x)
-                eval_count = eval_count + 1;  % 直接使用外部变量
+                eval_count = eval_count + 1;
                 
                 % 将优化变量转换为模型结构
                 current_model = obj.vector_to_model(x);
@@ -124,9 +111,6 @@ classdef LBFGSOptimizer < BaseOptimizer
                 fprintf('梯度范数: %e\n', norm(g));
                 fprintf('-------------------\n');
             end
-            
-            % 将初始模型转换为向量形式
-            x0 = obj.model_to_vector(initial_model);
             
             % 运行优化
             [x_opt, fval, exitflag, output] = fminunc(@objective, x0, options);
@@ -167,28 +151,21 @@ classdef LBFGSOptimizer < BaseOptimizer
         function save_optimization_results(obj, final_model, fval, output)
             % 创建结果结构体
             results = struct();
-            results.final_model = final_model;  % 最终模型参数
-            results.final_misfit = fval;        % 最终目标函数值
-            results.optimization_output = output; % 优化过程信息，包含：
-            % - output.iterations: 迭代次数
-            % - output.funcCount: 函数评估次数
-            % - output.firstorderopt: 一阶最优性
-            % - output.message: 终止消息
-            % - output.algorithm: 使用的算法
-            % - output.stepsize: 每次迭代的步长
-            % - output.fval: 每次迭代的函数值
+            results.final_model = final_model;
+            results.final_misfit = fval;
+            results.optimization_output = output;
             
             % 添加迭代历史信息的显示
             fprintf('\n=== 优化迭代历史 ===\n');
             fprintf('总迭代次数: %d\n', output.iterations);
             fprintf('函数评估次数: %d\n', output.funcCount);
-            fprintf('初始目标函数值: %e\n', output.funvals(1));
+            fprintf('初始目标函数值: %e\n', obj.initial_misfit);
             fprintf('最终目标函数值: %e\n', fval);
-            fprintf('优化改善率: %f%%\n', (output.funvals(1) - fval)/output.funvals(1)*100);
+            fprintf('优化改善率: %f%%\n', (obj.initial_misfit - fval)/obj.initial_misfit*100);
             
             % 绘制收敛曲线
             figure('Name', 'FWI Convergence History');
-            semilogy(1:length(output.fval), output.fval, 'b-o', 'LineWidth', 1.5);
+            semilogy(1:output.iterations, output.fval, 'b-o', 'LineWidth', 1.5);
             grid on;
             xlabel('迭代次数');
             ylabel('目标函数值 (对数尺度)');
