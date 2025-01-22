@@ -31,7 +31,7 @@ try
     params.syn_params = utils.load_json_params(syn_json_file);
 
     % 设置FWI特有参数
-    params.optimization = 'gradient_descent';  % 可选: 'gradient_descent', 'BB', 'LBFGS'
+    params.optimization = 'LBFGS';  % 可选: 'gradient_descent', 'BB', 'LBFGS'
     params.max_iterations = 2;     % 最大迭代次数
     params.tolerance = 0.1;         % 收敛容差（10%）
 

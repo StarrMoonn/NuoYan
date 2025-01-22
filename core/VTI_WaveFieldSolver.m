@@ -130,7 +130,7 @@ classdef VTI_WaveFieldSolver < handle
             if isfield(params, 'compute_kernel')
                 obj.compute_kernel = params.compute_kernel;
             else
-                obj.compute_kernel = 'cpu';
+                obj.compute_kernel = 'SIMD';
             end
         end
         
@@ -637,7 +637,9 @@ classdef VTI_WaveFieldSolver < handle
             vx_data = obj.vx;
             vy_data = obj.vy;
             
-            % 计算速度场的最大幅值
+      
+%{
+       % 计算速度场的最大幅值
             velocnorm = max(max(sqrt(vx_data.^2 + vy_data.^2)));
             
             % 输出当前时间步和炮号信息
@@ -650,7 +652,9 @@ classdef VTI_WaveFieldSolver < handle
             if velocnorm > obj.STABILITY_THRESHOLD
                 error('模拟变得不稳定并发散');
             end
-            
+             
+%}
+
             % 根据参数控制是否保存波场快照
             if obj.save_snapshots
                 % 创建以炮号命名的子目录

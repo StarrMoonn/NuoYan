@@ -59,7 +59,7 @@ classdef VTI_Adjoint < handle
         save_adjoint_snapshots  % 是否保存伴随波场快照
         snapshot_interval       % 快照保存间隔
         adjoint_output_dir      % 伴随波场输出目录
-        misfit_output_dir      % 目标函数值输出目录
+        misfit_output_dir       % 目标函数值输出目录
         
         % 当前炮的数据
         current_residuals_vx    % 当前炮的速度场x分量残差
@@ -93,8 +93,8 @@ classdef VTI_Adjoint < handle
             obj.DELTAT = obj.syn_params.DELTAT;
             
             % 设置波场快照相关的默认参数
-            obj.save_adjoint_snapshots = true;  % 默认值
-            obj.snapshot_interval = 100;        % 默认值
+            obj.save_adjoint_snapshots = false;  % 默认值
+            obj.snapshot_interval = 100;         % 默认值
             
             % 从 JSON 的嵌套结构体中读取参数
             if isfield(params, 'adjoint_params')
@@ -110,13 +110,14 @@ classdef VTI_Adjoint < handle
             % 使用默认输出目录
             current_dir = fileparts(fileparts(mfilename('fullpath')));
             obj.adjoint_output_dir = fullfile(current_dir, 'data', 'output', 'wavefield', 'adjoint');
+            obj.misfit_output_dir = fullfile(current_dir, 'data', 'output', 'fwi', 'fwi_misfit');
             
-            % 设置输出目录
-            if ~exist(obj.adjoint_output_dir, 'dir')
-                mkdir(obj.adjoint_output_dir);
-            end
-            if ~exist(obj.misfit_output_dir, 'dir')
-                mkdir(obj.misfit_output_dir);
+            % 创建必要的输出目录
+            output_dirs = {obj.adjoint_output_dir, obj.misfit_output_dir};
+            for i = 1:length(output_dirs)
+                if ~isempty(output_dirs{i}) && ~exist(output_dirs{i}, 'dir')
+                    mkdir(output_dirs{i});
+                end
             end
         end
         
@@ -187,7 +188,7 @@ classdef VTI_Adjoint < handle
             % 时间反传
             fprintf('\n=== 开始伴随波场时间反传 ===\n');
             for it = obj.NSTEP:-1:1
-                if mod(obj.NSTEP-it+1, 100) == 0  % 每100步输出一次信息
+                if mod(obj.NSTEP-it+1, 1000) == 0  % 每1000步输出一次信息
                     fprintf('计算伴随波场: 时间步 %d/%d\n', obj.NSTEP-it+1, obj.NSTEP);
                 end
                 

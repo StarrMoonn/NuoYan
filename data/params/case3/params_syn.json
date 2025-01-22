@@ -61,7 +61,7 @@
 
     "// 输出控制参数": null,
     "IT_DISPLAY": 100,
-    "save_snapshots": true,
+    "save_snapshots": false,
     "compute_kernel": "SIMD",
 
     "adjoint_params": {
