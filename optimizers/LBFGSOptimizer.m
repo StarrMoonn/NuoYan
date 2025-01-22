@@ -74,7 +74,8 @@ classdef LBFGSOptimizer < BaseOptimizer
                 'HessianApproximation', 'lbfgs', ...      % 使用 L-BFGS 方法
                 'MaxIterations', obj.max_iterations, ...  % 主迭代次数
                 'OptimalityTolerance', obj.tolerance, ... % 收敛容差
-                'MaxLineSearchIterations', 5, ...         % 每次迭代最多尝试5次步长
+                'MaxFunctionEvaluations', 5, ...          % 限制函数评估总次数
+                'StepTolerance', 1e-4, ...                % 步长容差
                 'SpecifyObjectiveGradient', true, ...     % 指定提供梯度
                 'Display', 'iter-detailed', ...           % 显示详细迭代信息
                 'OutputFcn', @outputFunction);            % 添加输出函数
@@ -83,17 +84,27 @@ classdef LBFGSOptimizer < BaseOptimizer
             function stop = outputFunction(x, optimValues, state)
                 stop = false;
                 switch state
+                    case 'init'
+                        fprintf('开始优化...\n');
                     case 'iter'
-                        fprintf('当前迭代: %d, 线搜索次数: %d\n', ...
-                            optimValues.iteration, optimValues.funcCount);
-                        fprintf('当前步长: %e\n', optimValues.stepsize);
+                        fprintf('当前迭代: %d, 函数评估次数: %d\n', ...
+                            optimValues.iteration, optimValues.funccount);
                         fprintf('目标函数值: %e\n', optimValues.fval);
-                        fprintf('梯度范数: %e\n\n', optimValues.firstorderopt);
+                        fprintf('梯度范数: %e\n', optimValues.firstorderopt);
+                    case 'interrupt'
+                        fprintf('优化被中断\n');
+                    case 'done'
+                        fprintf('优化完成\n');
                 end
+                fprintf('-------------------\n');
             end
             
             % 定义目标函数（返回误差和梯度）
+            eval_count = 0;  % 在函数外部初始化计数器
+            
             function [f, g] = objective(x)
+                eval_count = eval_count + 1;  % 直接使用外部变量
+                
                 % 将优化变量转换为模型结构
                 current_model = obj.vector_to_model(x);
                 
@@ -106,6 +117,12 @@ classdef LBFGSOptimizer < BaseOptimizer
                 
                 % 将梯度结构转换为向量
                 g = obj.model_to_vector(g_struct);
+                
+                % 打印每次函数评估的信息
+                fprintf('函数评估次数: %d\n', eval_count);
+                fprintf('目标函数值: %e\n', f);
+                fprintf('梯度范数: %e\n', norm(g));
+                fprintf('-------------------\n');
             end
             
             % 将初始模型转换为向量形式
@@ -165,9 +182,9 @@ classdef LBFGSOptimizer < BaseOptimizer
             fprintf('\n=== 优化迭代历史 ===\n');
             fprintf('总迭代次数: %d\n', output.iterations);
             fprintf('函数评估次数: %d\n', output.funcCount);
-            fprintf('初始目标函数值: %e\n', output.fval(1));
+            fprintf('初始目标函数值: %e\n', output.funvals(1));
             fprintf('最终目标函数值: %e\n', fval);
-            fprintf('优化改善率: %f%%\n', (output.fval(1) - fval)/output.fval(1)*100);
+            fprintf('优化改善率: %f%%\n', (output.funvals(1) - fval)/output.funvals(1)*100);
             
             % 绘制收敛曲线
             figure('Name', 'FWI Convergence History');
