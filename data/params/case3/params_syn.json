@@ -17,7 +17,7 @@
     "c13": {
         "type": "mat",
         "file": "data/model/case3/c13.mat"
-    },
+    },  
     "c33": {
         "type": "mat",
         "file": "data/model/case3/c33.mat"
@@ -61,13 +61,12 @@
 
     "// 输出控制参数": null,
     "IT_DISPLAY": 100,
-    "save_snapshots": false,
+    "save_snapshots": true,
     "compute_kernel": "SIMD",
 
-    "adjoint_params": {
-        "save_adjoint_snapshots": true,
-        "snapshot_interval": 100
-    },
+    "// 伴随波场输出控制参数": null,
+    "save_adjoint_snapshots": true,
+    "snapshot_interval": 100,
 
     "// FWI参数设置": null,
     "optimization": "LBFGS",

@@ -96,15 +96,13 @@ classdef VTI_Adjoint < handle
             obj.save_adjoint_snapshots = false;  % 默认值
             obj.snapshot_interval = 100;         % 默认值
             
-            % 从 JSON 的嵌套结构体中读取参数
-            if isfield(params, 'adjoint_params')
-                if isfield(params.adjoint_params, 'save_adjoint_snapshots')
-                    obj.save_adjoint_snapshots = params.adjoint_params.save_adjoint_snapshots;
-                end
-                
-                if isfield(params.adjoint_params, 'snapshot_interval')
-                    obj.snapshot_interval = params.adjoint_params.snapshot_interval;
-                end
+            % 直接从params.syn_params中读取参数
+            if isfield(params.syn_params, 'save_adjoint_snapshots')
+                obj.save_adjoint_snapshots = params.syn_params.save_adjoint_snapshots;
+            end
+        
+            if isfield(params.syn_params, 'snapshot_interval')
+                obj.snapshot_interval = params.syn_params.snapshot_interval;
             end
 
             % 使用默认输出目录
@@ -120,8 +118,6 @@ classdef VTI_Adjoint < handle
                 end
             end
         end
-        
-      
         
         % 2. 计算单炮残差
         function compute_residuals_single_shot(obj, ishot)

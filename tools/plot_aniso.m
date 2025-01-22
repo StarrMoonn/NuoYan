@@ -30,101 +30,89 @@
 %
 
 function plot_elastic_params(model_path)
-    % 修改extent为实际距离（km）
-    extent = [0, 8, 2, 0];  % [xmin, xmax, ymax, ymin]
+    % 网格参数
+    nx = 801;
+    nz = 201;
+    dx = 10;  % 假设网格间距为10m
+    dz = 10;
+    
+    % 计算实际距离（km）
+    x = (0:nx-1) * dx / 1000;  % 转换为km
+    z = (0:nz-1) * dz / 1000;  % 转换为km
     
     % 加载数据
-    c11 = load(fullfile(model_path, 'c11.mat')).c11;
-    c13 = load(fullfile(model_path, 'c13.mat')).c13;
-    c33 = load(fullfile(model_path, 'c33.mat')).c33;
-    c44 = load(fullfile(model_path, 'c44.mat')).c44;
-    rho = load(fullfile(model_path, 'rho.mat')).rho;
+    if contains(model_path, 'case4')
+        c11 = load(fullfile(model_path, 'c11.mat')).c11_case4;
+        c13 = load(fullfile(model_path, 'c13.mat')).c13_case4;
+        c33 = load(fullfile(model_path, 'c33.mat')).c33_case4;
+        c44 = load(fullfile(model_path, 'c44.mat')).c44_case4;
+        rho = load(fullfile(model_path, 'rho.mat')).rho_case4;
+    else
+        c11 = load(fullfile(model_path, 'c11.mat')).c11;
+        c13 = load(fullfile(model_path, 'c13.mat')).c13;
+        c33 = load(fullfile(model_path, 'c33.mat')).c33;
+        c44 = load(fullfile(model_path, 'c44.mat')).c44;
+        rho = load(fullfile(model_path, 'rho.mat')).rho;
+    end
     
     % 创建图形窗口
     figure('Position', [100, 100, 1500, 800]);
     
     % 绘制C11
     subplot(2,3,1);
-    imagesc(extent(1:2), extent(3:4), c11');
-    axis xy;  % 确保y轴方向正确
-    pbaspect([4 1 1]);  % 设置横纵比为4:1
+    imagesc(x, z, c11');
+    axis xy;
     colormap(jet);
-    c = colorbar;
-    c.Label.String = 'C11 (Pa)';
+    colorbar;
     xlabel('Distance (km)');
     ylabel('Depth (km)');
-    title('C11');
-    set(gca, 'XTick', [0 2 4 6 8]);
-    set(gca, 'YTick', [0 1 2]);
+    title('C11 (Pa)');
     
     % 绘制C13
     subplot(2,3,2);
-    imagesc(extent(1:2), extent(3:4), c13');
+    imagesc(x, z, c13');
     axis xy;
-    pbaspect([4 1 1]);  % 设置横纵比为4:1
     colormap(jet);
-    c = colorbar;
-    c.Label.String = 'C13 (Pa)';
+    colorbar;
     xlabel('Distance (km)');
     ylabel('Depth (km)');
-    title('C13');
-    set(gca, 'XTick', [0 2 4 6 8]);
-    set(gca, 'YTick', [0 1 2]);
+    title('C13 (Pa)');
     
     % 绘制C33
     subplot(2,3,3);
-    imagesc(extent(1:2), extent(3:4), c33');
+    imagesc(x, z, c33');
     axis xy;
-    pbaspect([4 1 1]);  % 设置横纵比为4:1
     colormap(jet);
-    c = colorbar;
-    c.Label.String = 'C33 (Pa)';
+    colorbar;
     xlabel('Distance (km)');
     ylabel('Depth (km)');
-    title('C33');
-    set(gca, 'XTick', [0 2 4 6 8]);
-    set(gca, 'YTick', [0 1 2]);
+    title('C33 (Pa)');
     
     % 绘制C44
     subplot(2,3,4);
-    imagesc(extent(1:2), extent(3:4), c44');
+    imagesc(x, z, c44');
     axis xy;
-    pbaspect([4 1 1]);  % 设置横纵比为4:1
     colormap(jet);
-    c = colorbar;
-    c.Label.String = 'C44 (Pa)';
+    colorbar;
     xlabel('Distance (km)');
     ylabel('Depth (km)');
-    title('C44');
-    set(gca, 'XTick', [0 2 4 6 8]);
-    set(gca, 'YTick', [0 1 2]);
+    title('C44 (Pa)');
     
     % 绘制密度分布
     subplot(2,3,5);
-    imagesc(extent(1:2), extent(3:4), rho');
+    imagesc(x, z, rho');
     axis xy;
-    pbaspect([4 1 1]);  % 设置横纵比为4:1
     colormap(jet);
-    c = colorbar;
-    c.Label.String = 'Density (kg/m³)';
+    colorbar;
     xlabel('Distance (km)');
     ylabel('Depth (km)');
-    title('Density Distribution');
-    set(gca, 'XTick', [0 2 4 6 8]);
-    set(gca, 'YTick', [0 1 2]);
+    title('Density (kg/m³)');
     
-    % 调整子图间距
-    set(gcf, 'PaperPositionMode', 'auto');
-    set(gcf, 'Units', 'normalized');
-    set(gcf, 'Position', [0.05, 0.05, 0.9, 0.85]);
-    
-    % 设置标题
+    % 设置总标题
     sgtitle(['Model Parameters: ' strrep(model_path(end-4:end), '_', ' ')]);
 end
 
-% 调用函数绘制两种情况
-% 绘制case1（带侵入体）
+% 修改调用部分
+close all;  % 清除所有图形窗口
 plot_elastic_params('./data/model/case3');
-
-% 绘制case2（不带侵入体）
-plot_elastic_params('./data/model/case2');
+plot_elastic_params('./data/model/case4');

@@ -1,14 +1,14 @@
 %% VTI模型参数生成脚本
-% 功能：生成二维VTI介质模型的弹性参数和密度数据
+% 功能：生成简单两层VTI介质模型的弹性参数和密度数据
 % 
 % 说明：
 %   1. 生成两种模型：带侵入体(case1)和不带侵入体(case2)的二层模型
 %   2. 计算并保存弹性参数(c11,c13,c33,c44)和密度(rho)
-%   3. case1包含：
+%   3. case2包含：
 %      - 第一层：Vp=2.5km/s, Vs=1.5km/s, ρ=1.0g/cc, δ=0.15, ε=0.25
 %      - 第二层：Vp=4.0km/s, Vs=2.0km/s, ρ=2.0g/cc, δ=0.075, ε=0.1
 %      - 侵入体：Vp=3.5km/s, Vs=1.75km/s, ρ=1.75g/cc, δ=0.1, ε=0.15
-%   4. case2仅包含两层结构，参数同上
+%   4. case3仅包含两层结构，参数同上
 %
 % 输入：
 %   - 无需外部输入，参数在脚本中直接定义
@@ -93,8 +93,8 @@ for ix = 375:426
     end
 end
 
-% 保存case1（带侵入体）
-save_path = './data/model/case1';
+% 保存case2（带侵入体）
+save_path = './data/model/case2';
 if ~exist(save_path, 'dir')
     mkdir(save_path);
 end
@@ -104,7 +104,7 @@ save(fullfile(save_path, 'c33.mat'), 'c33');
 save(fullfile(save_path, 'c44.mat'), 'c44');
 save(fullfile(save_path, 'rho.mat'), 'rho');
 
-% 重新计算case2（不带侵入体）
+% 重新计算case3（不带侵入体）
 % 重置数组
 c11 = zeros(nx,nz);
 c13 = zeros(nx,nz);
@@ -150,8 +150,8 @@ for ix = 1:nx
     end
 end
 
-% 保存case2（不带侵入体）
-save_path = './data/model/case2';
+% 保存case3（不带侵入体）
+save_path = './data/model/case3';
 if ~exist(save_path, 'dir')
     mkdir(save_path);
 end
@@ -160,5 +160,48 @@ save(fullfile(save_path, 'c13.mat'), 'c13');
 save(fullfile(save_path, 'c33.mat'), 'c33');
 save(fullfile(save_path, 'c44.mat'), 'c44');
 save(fullfile(save_path, 'rho.mat'), 'rho');
+
+% 为case4复制case3的数据
+c11_case4 = c11;
+c13_case4 = c13;
+c33_case4 = c33;
+c44_case4 = c44;
+rho_case4 = rho;
+
+% 修改高斯滤波器参数
+sigma = 8;  % 增大标准差，使模糊更明显
+kernel_size = 31;  % 增大核大小，扩大影响范围
+
+% 创建高斯核
+gaussian_kernel = fspecial('gaussian', [kernel_size kernel_size], sigma);
+
+% 对所有参数进行高斯模糊处理
+c11_case4 = imfilter(c11_case4, gaussian_kernel, 'replicate');
+c13_case4 = imfilter(c13_case4, gaussian_kernel, 'replicate');
+c33_case4 = imfilter(c33_case4, gaussian_kernel, 'replicate');
+c44_case4 = imfilter(c44_case4, gaussian_kernel, 'replicate');
+rho_case4 = imfilter(rho_case4, gaussian_kernel, 'replicate');
+
+% 添加小幅随机扰动（可选）
+noise_level = 0.02; % 2%的随机扰动
+for field = {c11_case4, c13_case4, c33_case4, c44_case4, rho_case4}
+    data = field{1};
+    noise = noise_level * (rand(size(data))-0.5) .* data;
+    field{1} = data + noise;
+end
+
+% 确保物理参数的合理性（可选）
+% 例如确保c11 > c13等
+
+% 保存case4（高斯模糊版本）
+save_path = './data/model/case4';
+if ~exist(save_path, 'dir')
+    mkdir(save_path);
+end
+save(fullfile(save_path, 'c11.mat'), 'c11_case4');
+save(fullfile(save_path, 'c13.mat'), 'c13_case4');
+save(fullfile(save_path, 'c33.mat'), 'c33_case4');
+save(fullfile(save_path, 'c44.mat'), 'c44_case4');
+save(fullfile(save_path, 'rho.mat'), 'rho_case4');
 
 
