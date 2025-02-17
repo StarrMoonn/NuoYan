@@ -8,6 +8,7 @@ classdef FletcherReevesCGOptimizer < BaseOptimizer
         dec             % 步长衰减因子
         max_line_search % 最大线搜索次数
         max_step_size   % 最大更新步长
+        max_iterations  % 最大迭代次数
     end
     
     methods
@@ -17,6 +18,12 @@ classdef FletcherReevesCGOptimizer < BaseOptimizer
             obj.dec = 0.5;
             obj.max_line_search = 10;
             obj.max_step_size = 30;
+            obj.max_iterations = 500;  % 设置默认最大迭代次数
+            
+            % 如果params中包含max_iterations，则使用用户指定的值
+            if isfield(params, 'max_iterations')
+                obj.max_iterations = params.max_iterations;
+            end
         end
         
         function run(obj)
