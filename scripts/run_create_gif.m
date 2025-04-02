@@ -10,8 +10,10 @@ clc;
 clear;
 
 % 设置路径
-png_dir = 'E:\Matlab\VTI_project\data\output\images\forward\shot_001\vx';  % PNG文件目录
-output_dir = 'E:\Matlab\VTI_project\data\output\images\forward\shot_001\gif';  % GIF输出目录
+% png_dir = 'E:\Matlab\VTI_project\data\output\images\forward\shot_001\vx';  % PNG文件目录
+% output_dir = 'E:\Matlab\VTI_project\data\output\images\forward\shot_001\gif';  % GIF输出目录
+png_dir = 'E:\Matlab\VTI_project\data\output\images\seismogram_plots';  % PNG文件目录
+output_dir = 'E:\Matlab\VTI_project\data\output\images\seismogram_plots\gif';  % GIF输出目录
 
 % 创建输出目录
 if ~exist(output_dir, 'dir')

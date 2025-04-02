@@ -24,7 +24,6 @@ classdef CGOptimizer < BaseOptimizer
             
             % 显示当前速度模型和梯度
             figure(1); imagesc(grad_stk1.c11); pause(0.001);        % 显示c11分量
-            figure(2); imagesc(grad_stk1.c33); pause(0.001);        % 显示c33分量
             k
             disp('%%%%%%%%%%%%%%%%%%%%iteration time%%%%%%%%%%%%%%%%%%%%%%')
 
@@ -32,12 +31,29 @@ classdef CGOptimizer < BaseOptimizer
             objval(k+1) = objval0;   % 记录初始目标函数值
 
             % 计算归一化的梯度方向
-            total_grad_norm = norm(grad_stk1(:));  % 计算总梯度的范数
-            p = 100 * grad_stk1 / total_grad_norm; % 归一化并放大梯度
-            d1 = -2 * p;                           % 最速下降方向
+            total_grad_norm = norm([grad_stk1.c11(:); grad_stk1.c13(:); grad_stk1.c33(:); 
+                                   grad_stk1.c44(:); grad_stk1.rho(:)]);  % 计算总梯度的范数
+
+            % 归一化并放大梯度
+            p = struct();
+            p.c11 = 100 * grad_stk1.c11 / total_grad_norm;
+            p.c13 = 100 * grad_stk1.c13 / total_grad_norm;
+            p.c33 = 100 * grad_stk1.c33 / total_grad_norm;
+            p.c44 = 100 * grad_stk1.c44 / total_grad_norm;
+            p.rho = 100 * grad_stk1.rho / total_grad_norm;
+
+            % 最速下降方向
+            d1 = struct();
+            d1.c11 = -2 * p.c11;
+            d1.c13 = -2 * p.c13;
+            d1.c33 = -2 * p.c33;
+            d1.c44 = -2 * p.c44;
+            d1.rho = -2 * p.rho;
             
             % 步长控制
-            maxd = max(max(abs(d1)));            % 需要考虑多参数的最大值
+            maxd = max(max(abs(d1.c11(:))), max(abs(d1.c13(:))), 
+                       max(abs(d1.c33(:))), max(abs(d1.c44(:))), 
+                       max(abs(d1.rho(:))));
             dec = 0.5;                           % 步长衰减因子
             ks = 1;                              % 线搜索计数器
 
@@ -46,7 +62,9 @@ classdef CGOptimizer < BaseOptimizer
             % 控制最大更新步长不超过30
             while maxd > 30
                 a = dec*a;                       % 如果更新太大，减小步长
-                maxd = max(max(abs(a*d1)));      % 重新计算最大更新量
+                maxd = max(max(abs(a*d1.c11(:))), max(abs(a*d1.c13(:))), 
+                           max(abs(a*d1.c33(:))), max(abs(a*d1.c44(:))), 
+                           max(abs(a*d1.rho(:))));
             end
             a                                    % 显示最终步长
             maxd                                 % 显示最大更新量
@@ -55,7 +73,7 @@ classdef CGOptimizer < BaseOptimizer
             while (ks < 10)                      % 最多尝试10次
                 % 更新速度模型
                 current_model = obj.get_current_model();
-                new_model = current_model + a*d1;               % 试探性更新
+                new_model = current_model + a*d1.c11;               % 试探性更新
                 obj.set_current_model(new_model);
                 
                 % 计算新模型的目标函数值和梯度
@@ -74,7 +92,7 @@ classdef CGOptimizer < BaseOptimizer
                     objval0 = objval1;          % 更新目标函数值
                     grad_stk1 = grad_stk2;      % 更新梯度
                     p0 = p;                     % 保存旧的梯度方向
-                    d0 = a*d1;                  % 保存搜索方向
+                    d0 = a*d1.c11;              % 保存搜索方向
                     break;
                 else
                     a = dec*a;                  % 如果目标函数值增加，减小步长
@@ -112,17 +130,22 @@ classdef CGOptimizer < BaseOptimizer
                 % 计算共轭因子beta（Fletcher-Reeves公式）
                 b = sqrt(sum(sum((p'*p).^2))/sum(sum((p0'*p0).^2)));
                 % 计算共轭方向：当前负梯度方向 + beta*前一次方向
-                d1 = -p + b*d0;
+                d1 = struct();
+                d1.c11 = -p.c11 + b*p0.c11;
 
                 %%% 步长控制 %%%
-                maxd = max(max(abs(d1)));             % 计算最大更新量
+                maxd = max([max(abs(d1.c11(:))), max(abs(d1.c13(:))), 
+                           max(abs(d1.c33(:))), max(abs(d1.c44(:))), 
+                           max(abs(d1.rho(:)))]);             % 计算最大更新量
                 dec = 0.5;                            % 步长衰减因子
 
                 % 初始步长设置和控制
                 a = 1;
                 while maxd > 30                       % 控制最大更新不超过30
                     a = dec*a;                        % 减小步长
-                    maxd = max(max(abs(a*d1)));       % 重新计算最大更新量
+                    maxd = max([max(abs(a*d1.c11(:))), max(abs(a*d1.c13(:))), 
+                               max(abs(a*d1.c33(:))), max(abs(a*d1.c44(:))), 
+                               max(abs(a*d1.rho(:)))]);       % 重新计算最大更新量
                 end
                 
                 % 如果上一次线搜索失败，使用上一次的步长
@@ -137,7 +160,7 @@ classdef CGOptimizer < BaseOptimizer
                 ks = 1;                               % 线搜索计数器
                 while (ks < 10)                       % 最多尝试10次
                     % 更新速度模型
-                    v0s1 = obj.get_current_model() + a*d1;                % 试探性更新
+                    v0s1 = obj.get_current_model() + a*d1.c11;                % 试探性更新
                     v0s1 = obj.control_v(v0s1, obj.water, obj.vmin, obj.vmax);  % 应用速度约束
 
                     % 计算新模型的目标函数值和梯度
@@ -155,7 +178,7 @@ classdef CGOptimizer < BaseOptimizer
                         objval0 = objval1;            % 更新目标函数值
                         grad_stk1 = grad_stk2;        % 更新梯度
                         p0 = p;                       % 保存旧的梯度方向
-                        d0 = a*d1;                    % 保存搜索方向
+                        d0 = a*d1.c11;                % 保存搜索方向
                         break;
                     else
                         a = dec*a;                    % 如果目标函数值增加，减小步长
