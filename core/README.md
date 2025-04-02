@@ -24,6 +24,14 @@
      - 基于波形的标准版
      - 基于包络差的加强版
 
+5. **优化算法**
+   - 梯度下降法：`GradientDescentOptimizer.m`
+   - L-BFGS法：`LBFGSOptimizer.m`
+   - Fletcher-Reeves共轭梯度法：`FletcherReevesCGOptimizer.m`
+     - 基于中海油参考代码移植
+     - 结合最速下降法和共轭梯度法
+     - 适用于大规模反演问题
+
 ## 待开发功能
 1. **实际数据处理**
    - 集成实际SEG-Y数据读取功能

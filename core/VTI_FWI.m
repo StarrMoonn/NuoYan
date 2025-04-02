@@ -13,6 +13,7 @@
 %     * 'gradient_descent'：梯度下降法（默认）
 %     * 'BB'：BB算法
 %     * 'LBFGS'：L-BFGS算法
+%     * 'FletcherReevesCG'：Fletcher-Reeves共轭梯度法
 %   - 其他优化器所需参数
 %
 % 作者：StarrMoonn
@@ -38,6 +39,8 @@ classdef VTI_FWI < handle
                     obj.optimizer = BBOptimizer(params);
                 case 'LBFGS'
                     obj.optimizer = LBFGSOptimizer(params);
+                case 'FletcherReevesCG'
+                    obj.optimizer = FletcherReevesCGOptimizer(params);
                 otherwise
                     error('未知的优化方法: %s', params.optimization);
             end
