@@ -12,7 +12,7 @@
 %   - utils.load_json_params函数
 %
 % 作者：StarrMoonn
-% 日期：2025-01-13
+% 日期：2025-04-10
 %
 
 clear;
@@ -28,7 +28,7 @@ project_root = fileparts(script_path);
 addpath(project_root);
 
 % 使用相对路径指定JSON文件路径
-json_file = fullfile(project_root, 'data', 'params', 'case3', 'params_syn.json');
+json_file = fullfile(project_root, 'data', 'params', 'case1', 'params.json');
 
 try
     % 1. 加载和初始化参数

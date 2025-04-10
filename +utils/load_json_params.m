@@ -14,7 +14,7 @@
 %   - params: 包含所有参数的结构体，包括：
 %     * 网格参数 (NX, NY, DELTAX, DELTAY)
 %     * 时间步进参数 (NSTEP, DELTAT)
-%     * 震源参数 (first_shot_i/j, shot_di/j, NSHOT)
+%     * 震源参数 (first_shot_x/y, shot_dx/dy, NSHOT)
 %     * 材料参数数组 (c11, c13, c33, c44, rho)
 %     * 其他配置参数
 %
@@ -54,7 +54,7 @@ function params = load_json_params(json_file)
     
     % 验证必要参数
     required_fields = {'NX', 'NY', 'DELTAX', 'DELTAY', 'NSTEP', 'DELTAT', ...
-                      'first_shot_i', 'first_shot_j', 'shot_di', 'shot_dj', 'NSHOT'};
+                      'first_shot_x', 'first_shot_y', 'shot_dx', 'shot_dy', 'NSHOT'};
     
     for i = 1:length(required_fields)
         if ~isfield(params, required_fields{i})

@@ -69,10 +69,8 @@ params.first_rec_x = 100;
 params.first_rec_y = 50;
 params.rec_dx = 4;
 params.rec_dy = 0;
-params.NSHOT = 1;
 params.factor = 1.0e7;
-params.save_snapshots = true;
-params.current_shot_number = 1;
+
 
 % 设置PML相关参数
 params.NPOINTS_PML = 10;            
