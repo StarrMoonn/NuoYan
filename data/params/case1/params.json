@@ -36,10 +36,12 @@
     "factor": 1.0e7,
     "ANGLE_FORCE": 0.0,
     "NSHOT": 2,
-    "first_shot_i": 100,
-    "first_shot_j": 200,
-    "shot_di": 100,
-    "shot_dj": 0,
+    "first_shot_x": 200,
+    "first_shot_y": 200,
+    "shot_dx": 100,
+    "shot_dy": 0,
+    "ISOURCE": 200,
+    "JSOURCE": 200,
     
     "// 检波器参数": null,
     "NREC": 50,
@@ -58,13 +60,8 @@
     "K_MAX_PML": 1.0,
 
     "// 输出控制参数": null,
-    "IT_DISPLAY": 100,
+    "IT_DISPLAY": 500,
     "save_snapshots": false,
-    "compute_mode": "openMP",
+    "compute_kernel": "openMP"
 
-    "adjoint_params": {
-        "save_adjoint_snapshots": true,
-        "snapshot_interval": 100,
-        "adjoint_output_dir": "output/adjoint_snapshots"
-    }
 } 
