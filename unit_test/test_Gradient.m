@@ -41,7 +41,7 @@
 %   - 注意坐标系统的一致性
 %
 % 作者：StarrMoonn
-% 日期：2025-01-09
+% 日期：2025-04-11
 %
 clear;
 clc;
@@ -84,11 +84,16 @@ try
     % 选择要计算的炮号
     ishot = 1;
 
+    % 生成正演波场
+    fprintf('\n=== 生成正演波场 ===\n');
+    [~, ~, forward_wavefield] = gradient_solver.adjoint_solver.wavefield_solver_syn.forward_modeling_single_shot(ishot);
+    
     % 计算单炮的梯度
     fprintf('\n=== 计算第%d炮梯度 ===\n', ishot);
     fprintf('开始时间: %s\n', datetime('now'));
-    gradient = gradient_solver.compute_single_shot_gradient(ishot);
+    [gradient, misfit] = gradient_solver.compute_single_shot_gradient(ishot, forward_wavefield);
     fprintf('结束时间: %s\n', datetime('now'));
+    fprintf('目标函数值(misfit): %e\n', misfit);
 
     % 验证梯度结果
     fprintf('\n=== 验证梯度结果 ===\n');
@@ -203,6 +208,10 @@ try
     [~, max_idx_c11] = max(abs(gradient.c11(:)));
     [max_x_c11, max_z_c11] = ind2sub(size(gradient.c11), max_idx_c11);
     fprintf('C11最大梯度位置: (%d, %d)\n', max_x_c11, max_z_c11);
+    
+    % 验证目标函数值
+    fprintf('\n=== 验证目标函数值 ===\n');
+    fprintf('目标函数值: %e\n', misfit);
     
 catch ME
     fprintf('\n错误: %s\n', ME.message);

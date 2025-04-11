@@ -62,5 +62,10 @@
     "// 输出控制参数": null,
     "IT_DISPLAY": 100,
     "save_snapshots": true,
-    "compute_kernel": "SIMD"
+    "compute_kernel": "SIMD",
+
+    "// 梯度计算参数": null,
+    "save_shot_gradient": false,
+    "save_gradient_interval": 5,
+    "save_to_disk": true
 } 

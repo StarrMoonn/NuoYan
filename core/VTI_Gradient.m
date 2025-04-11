@@ -94,14 +94,18 @@ classdef VTI_Gradient < handle
         end
         
         % 计算单炮梯度
-        function gradient = compute_single_shot_gradient(obj, ishot, forward_wavefield)
+        function [gradient, misfit] = compute_single_shot_gradient(obj, ishot, forward_wavefield)
             fprintf('\n=== 开始计算第 %d 炮梯度 ===\n', ishot);
 
             try
-                % 计算伴随波场
+                % 先计算残差和目标函数值
+                misfit = obj.adjoint_solver.compute_residuals_single_shot(ishot);
+                fprintf('第 %d 炮目标函数值: %e\n', ishot, misfit);
+                
+                % 再计算伴随波场
                 adjoint_wavefield = obj.adjoint_solver.compute_adjoint_wavefield_single_shot(ishot);
                 
-                % 使用传入的正演波场计算梯度
+                % 使用正演波场和伴随波场计算梯度
                 gradient = obj.compute_vti_gradient(forward_wavefield, adjoint_wavefield);
                 
                 % 可选地保存单炮梯度
@@ -118,10 +122,6 @@ classdef VTI_Gradient < handle
                 if exist('adjoint_wavefield', 'var')
                     clear adjoint_wavefield;
                 end
-                
-                if exist('gradient', 'var')
-                    clear gradient gradient_c11 gradient_c13 gradient_c33 gradient_c44 gradient_rho;
-                end
             end
             
             fprintf('\n=== 炮号 %d 梯度计算完成 ===\n', ishot);
@@ -132,12 +132,6 @@ classdef VTI_Gradient < handle
             % 获取时间步长和其他参数
             dt = obj.adjoint_solver.syn_params.DELTAT;
             params = obj.adjoint_solver.syn_params;
-            
-            % 添加调试信息
-            [NX, NY, NT] = size(forward_wavefield.vx);
-            fprintf('开始计算VTI介质梯度:\n');
-            fprintf('时间步长 dt = %e\n', dt);
-            fprintf('总时间步数: %d\n', NT);
             
             % 调用 MEX 函数计算梯度
             try
@@ -177,22 +171,5 @@ classdef VTI_Gradient < handle
             save(filepath, 'gradient');
             fprintf('梯度已保存到: %s\n', filepath);
         end
-
-  
-%{
-       % 不需要了，已经打包到c++源码中，使用二阶中心差分
-        function [dx, dy] = compute_gradient(obj, field)
-            % 获取网格间距
-            deltax = obj.adjoint_solver.syn_params.DELTAX;
-            deltay = obj.adjoint_solver.syn_params.DELTAY;
-            
-            % 四阶中心差分计算导数
-            %[dx, dy] = utils.computeFourthOrderDiff(field, deltax, deltay);
-
-            % 二阶中心差分计算导数
-            [dx, dy] = utils.computeGradientField(field, deltax, deltay);
-        end 
-%}
-
     end
 end 
