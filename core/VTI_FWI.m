@@ -61,7 +61,7 @@ classdef VTI_FWI < handle
         gradient_calculator % VTI_Gradient实例
         
         % 优化参数
-        max_iterations = 10  % 最大迭代次数
+        max_iterations = 500  % 最大迭代次数
         current_iteration = 0 % 当前迭代次数
         step_length = 1.0     % 步长
         step_length_decay = 0.5 % 步长衰减因子
@@ -290,7 +290,7 @@ classdef VTI_FWI < handle
                     p = obj.normalize_gradient(obj.current_gradient);
                     
                     % 计算Fletcher-Reeves系数
-                    obj.beta = obj.compute_FR_coefficient(obj.current_gradient, obj.previous_gradient);
+                    obj.beta = sqrt(obj.compute_FR_coefficient(obj.current_gradient, obj.previous_gradient));
                     
                     % 计算新的搜索方向
                     obj.search_direction = obj.calculate_new_search_direction(p, obj.beta, obj.previous_direction);
@@ -298,6 +298,12 @@ classdef VTI_FWI < handle
                 
                 % 更新迭代次数
                 obj.current_iteration = obj.current_iteration + 1;
+                
+                % 检查线搜索失败条件
+                if (obj.current_iteration == obj.max_line_search)
+                    fprintf('线搜索失败达到最大次数，终止迭代\n');
+                    break;
+                end
             end
             
             fprintf('\n====== VTI全波形反演优化完成 ======\n');
@@ -419,7 +425,7 @@ classdef VTI_FWI < handle
             if previous_norm < 1e-10
                 beta = 0;
             else
-                beta = current_norm / previous_norm;
+                beta = sqrt(current_norm / previous_norm);
             end
         end
         
