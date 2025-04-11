@@ -1,4 +1,4 @@
-%% MATLAB的gradient函数计算场的空间导数
+%% MATLAB的gradient函数计算场的空间导数（已废弃）
 %
 % 功能：
 %   二阶中心差分计算空间导数，使用MATLAB内置的gradient函数
