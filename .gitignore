@@ -1,0 +1,17 @@
+# 忽略data/output目录下的所有文件和文件夹
+data/output/
+data/output/*
+data/output/**/*
+
+# 特别忽略大型.mat文件
+*.mat
+
+# 忽略具体的输出子目录
+data/output/wavefield/
+data/output/gradient/
+data/output/fwi/
+data/output/images/
+
+# 忽略临时文件
+*.asv
+*.m~ 

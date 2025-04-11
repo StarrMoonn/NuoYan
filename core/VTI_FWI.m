@@ -120,52 +120,36 @@ classdef VTI_FWI < handle
         
         % 计算目标函数和梯度（对应原objfun2_bx）
         function [misfit, gradient] = compute_misfit_and_gradient(obj, model)
-            misfit = 0;
-            gradient = struct('c11', zeros(size(model.c11)), ...
-                             'c13', zeros(size(model.c13)), ...
-                             'c33', zeros(size(model.c33)), ...
-                             'c44', zeros(size(model.c44)), ...
-                             'rho', zeros(size(model.rho)));
-            
             % 更新模型参数
             obj.modeling.update_model_params(model);
             
-            % 遍历所有炮集
+            % 初始化总梯度和目标函数值
+            total_gradient = struct('c11', zeros(size(model.c11)), ...
+                                  'c13', zeros(size(model.c13)), ...
+                                  'c33', zeros(size(model.c33)), ...
+                                  'c44', zeros(size(model.c44)), ...
+                                  'rho', zeros(size(model.rho)));
+            total_misfit = 0;
+            
+            % 累加所有炮的梯度和目标函数值
             for ishot = 1:obj.nshots
-                % 1. 正演模拟
-                [vx_syn, vy_syn, forward_wavefield] = obj.modeling.forward_modeling_single_shot(ishot);
+                % 正演模拟
+                [~, ~, forward_wavefield] = obj.modeling.forward_modeling_single_shot(ishot);
                 
-                % 2. 计算残差和局部目标函数
-                shot_misfit = obj.adjoint.compute_residuals_single_shot(ishot);
-                misfit = misfit + shot_misfit;
+                % 计算梯度和目标函数值
+                [shot_gradient, shot_misfit] = obj.gradient_calculator.compute_single_shot_gradient(ishot, forward_wavefield);
                 
-                % 保存misfit到文件
-                if obj.save_to_disk
-                    misfit_file = fullfile(obj.misfit_output_dir, ...
-                        sprintf('shot_%03d_misfit_iter_%03d.mat', ishot, obj.current_iteration));
-                    save(misfit_file, 'shot_misfit', '-v7.3');
+                % 累加
+                fields = fieldnames(total_gradient);
+                for i = 1:length(fields)
+                    total_gradient.(fields{i}) = total_gradient.(fields{i}) + shot_gradient.(fields{i});
                 end
-                
-                % 3-4. 计算伴随波场和梯度合并处理
-                shot_gradient = obj.gradient_calculator.compute_single_shot_gradient(ishot, forward_wavefield);
-                gradient = obj.add_gradient(gradient, shot_gradient);
+                total_misfit = total_misfit + shot_misfit;
             end
             
-            % 处理水层梯度
-            gradient = obj.apply_water_layer_mask(gradient);
-            
-            % 保存总梯度，每save_interval次迭代保存一次
-            if obj.save_to_disk && (mod(obj.current_iteration, obj.save_interval) == 0 || obj.current_iteration == 1)
-                gradient_file = fullfile(obj.gradient_output_dir, ...
-                    sprintf('gradient_iter_%03d.mat', obj.current_iteration));
-                save(gradient_file, 'gradient', '-v7.3');
-                
-                % 同时保存当前模型（如果需要）
-                model_file = fullfile(obj.model_output_dir, ...
-                    sprintf('model_iter_%03d.mat', obj.current_iteration));
-                current_model = model;
-                save(model_file, 'current_model', '-v7.3');
-            end
+            % 水层梯度处理
+            gradient = obj.apply_water_layer_mask(total_gradient);
+            misfit = total_misfit;
         end
         
         % 添加梯度（用于累加多炮梯度）
@@ -271,7 +255,7 @@ classdef VTI_FWI < handle
                     p = obj.normalize_gradient(obj.current_gradient);
                     
                     % 计算Fletcher-Reeves系数
-                    obj.beta = obj.calculate_fletcher_reeves_beta(p, obj.previous_normalized_grad);
+                    obj.beta = obj.compute_FR_coefficient(obj.current_gradient, obj.previous_gradient);
                     
                     % 计算新的搜索方向
                     obj.search_direction = obj.calculate_new_search_direction(p, obj.beta, obj.previous_direction);
@@ -384,21 +368,23 @@ classdef VTI_FWI < handle
         end
         
         % 计算Fletcher-Reeves系数
-        function beta = calculate_fletcher_reeves_beta(obj, current, previous)
-            current_sq = 0;
-            previous_sq = 0;
+        function beta = compute_FR_coefficient(obj, current_grad, previous_grad)
+            % 计算当前梯度和前一步梯度的内积比
+            fields = fieldnames(current_grad);
+            current_norm = 0;
+            previous_norm = 0;
             
-            fields = fieldnames(current);
             for i = 1:length(fields)
                 field = fields{i};
-                current_sq = current_sq + sum(current.(field)(:).^2);
-                previous_sq = previous_sq + sum(previous.(field)(:).^2);
+                current_norm = current_norm + sum(sum(current_grad.(field).^2));
+                previous_norm = previous_norm + sum(sum(previous_grad.(field).^2));
             end
             
-            if previous_sq < eps
+            % Fletcher-Reeves公式
+            if previous_norm < 1e-10
                 beta = 0;
             else
-                beta = sqrt(current_sq / previous_sq);
+                beta = current_norm / previous_norm;
             end
         end
         
@@ -423,13 +409,14 @@ classdef VTI_FWI < handle
         end
         
         % 更新模型
-        function new_model = update_model(obj, model, direction, step)
-            new_model = struct();
+        function new_model = update_model(obj, model, direction, alpha)
             fields = fieldnames(model);
+            new_model = struct();
+            
             for i = 1:length(fields)
                 field = fields{i};
                 if isfield(direction, field)
-                    new_model.(field) = model.(field) + direction.(field) * step;
+                    new_model.(field) = model.(field) + alpha * direction.(field);
                 else
                     new_model.(field) = model.(field);
                 end
@@ -480,6 +467,123 @@ classdef VTI_FWI < handle
             if obj.save_to_disk
                 saveas(gcf, fullfile(obj.misfit_output_dir, 'convergence_curves.fig'));
                 saveas(gcf, fullfile(obj.misfit_output_dir, 'convergence_curves.png'));
+            end
+        end
+        
+        % 在VTI_FWI中增加步长控制函数
+        function [alpha, max_updates] = control_step_length(obj, direction, model)
+            % 初始步长
+            alpha = 1.0;
+            dec_factor = 0.5;
+            
+            % 不同参数的最大允许更新量
+            max_allowed = struct('c11', 30e9, 'c13', 20e9, 'c33', 30e9, 'c44', 15e9, 'rho', 100);
+            
+            % 计算每个参数的最大更新量
+            fields = fieldnames(direction);
+            max_updates = struct();
+            
+            for i = 1:length(fields)
+                field = fields{i};
+                max_updates.(field) = max(abs(direction.(field)(:))) * alpha;
+                
+                % 如果某参数更新量过大，减小步长
+                while max_updates.(field) > max_allowed.(field)
+                    alpha = alpha * dec_factor;
+                    max_updates.(field) = max(abs(direction.(field)(:))) * alpha;
+                end
+            end
+        end
+        
+        % 在VTI_FWI中增加线搜索函数
+        function [optimal_alpha, new_model, new_misfit] = line_search(obj, model, direction, initial_alpha)
+            alpha = initial_alpha;
+            dec_factor = 0.5;
+            max_trials = 10;
+            
+            % 计算当前目标函数值
+            [current_misfit, ~] = obj.compute_misfit_and_gradient(model);
+            
+            for trial = 1:max_trials
+                % 试探性更新模型
+                new_model = obj.update_model(model, direction, alpha);
+                
+                % 应用模型约束
+                new_model = obj.apply_model_constraints(new_model);
+                
+                % 计算新模型的目标函数值(不计算梯度可节省时间)
+                new_misfit = obj.compute_misfit_only(new_model);
+                
+                % 检查目标函数是否减小
+                if new_misfit < current_misfit
+                    optimal_alpha = alpha;
+                    return;
+                else
+                    % 减小步长继续尝试
+                    alpha = alpha * dec_factor;
+                end
+            end
+            
+            % 如果没有找到合适的步长，返回一个较小的值
+            optimal_alpha = alpha;
+            new_model = obj.update_model(model, direction, optimal_alpha);
+            new_model = obj.apply_model_constraints(new_model);
+            new_misfit = obj.compute_misfit_only(new_model);
+        end
+        
+        % 在VTI_FWI中实现共轭梯度优化主循环
+        function run_CG_optimization(obj)
+            % 初始化
+            current_model = obj.initial_model;
+            [misfit, gradient] = obj.compute_misfit_and_gradient(current_model);
+            
+            % 第一次迭代使用最速下降法方向
+            current_direction = struct();
+            fields = fieldnames(gradient);
+            for i = 1:length(fields)
+                field = fields{i};
+                current_direction.(field) = -gradient.(field);
+            end
+            
+            % 优化迭代
+            for iter = 1:obj.max_iterations
+                % 步长控制
+                [initial_alpha, max_updates] = obj.control_step_length(current_direction, current_model);
+                
+                % 线搜索
+                [optimal_alpha, new_model, new_misfit] = obj.line_search(current_model, current_direction, initial_alpha);
+                
+                % 计算新模型的梯度
+                [~, new_gradient] = obj.compute_misfit_and_gradient(new_model);
+                
+                % 保存结果
+                if mod(iter, obj.save_interval) == 0 || iter == 1 || iter == obj.max_iterations
+                    obj.save_iteration_results(iter, new_model, new_gradient, new_misfit);
+                end
+                
+                % 计算Fletcher-Reeves系数
+                beta = obj.compute_FR_coefficient(new_gradient, gradient);
+                
+                % 计算新的搜索方向
+                new_direction = struct();
+                for i = 1:length(fields)
+                    field = fields{i};
+                    new_direction.(field) = -new_gradient.(field) + beta * current_direction.(field);
+                end
+                
+                % 更新迭代变量
+                current_model = new_model;
+                gradient = new_gradient;
+                current_direction = new_direction;
+                misfit = new_misfit;
+                
+                % 输出迭代信息
+                fprintf('迭代 %d: 目标函数值 = %e, 步长 = %e\n', iter, misfit, optimal_alpha);
+                
+                % 检查收敛条件
+                if obj.check_convergence(iter, misfit)
+                    break;
+                end
             end
         end
     end
