@@ -40,7 +40,7 @@
 %   - 检查内存是否足够大
 %
 % 作者：StarrMoonn
-% 日期：2025-01-07
+% 日期：2025-04-10
 %
 clear;
 clc;
@@ -95,7 +95,11 @@ try
     % 选择要计算的炮号
     ishot = 1;  % 可以根据需要修改炮号
     
-    % 计算单炮的伴随波场
+    % 在计算伴随波场前先计算残差
+    misfit = adjoint_solver.compute_residuals_single_shot(ishot);
+    fprintf('目标函数值(misfit): %e\n', misfit);
+
+    % 然后再计算伴随波场
     fprintf('\n=== 开始计算第 %d 炮的伴随波场 ===\n', ishot);
     fprintf('开始时间: %s\n', datetime('now'));
     adjoint_wavefield = adjoint_solver.compute_adjoint_wavefield_single_shot(ishot);

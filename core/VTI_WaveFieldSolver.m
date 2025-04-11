@@ -19,34 +19,31 @@ classdef VTI_WaveFieldSolver < handle
         c33             % 
         c44             % 
         rho             % 介质密度(kg/m³) 
-        f0              % 震源频率(Hz) (保持标量)
+        f0              % 震源频率(Hz) 
         
         % 时间步进参数
         NSTEP           % 总时间步数
         DELTAT          % 时间步长
         
         % 震源参数
-        ISOURCE         % 震源x位置索引 
-        JSOURCE         % 震源y位置索引
-        xsource         % 震源x坐标
-        ysource         % 震源y坐标
+        ISOURCE         % 震源x网格索引（网格点编号） 
+        JSOURCE         % 震源y网格索引（网格点编号）   
+        xsource         % 震源x物理坐标（浮点值，单位通常是米），网格索引转换到物理坐标
+        ysource         % 震源y物理坐标（浮点值，单位通常是米），网格索引转换到物理坐标
         t0              % 时间延迟
         factor          % 震源强度因子
         ANGLE_FORCE     % 力的角度
-        NSHOT           % 总炮数
-        current_shot_number  % 当前炮号
         
         % 检波器参数
         NREC            % 检波器数量
         first_rec_x     % 第一个检波器x网格位置
         first_rec_y     % 第一个检波器y网格位置
-        rec_x           % 检波器x网格位置数组
-        rec_y           % 检波器y网格位置数组
         rec_dx          % 检波器x方向网格间隔
         rec_dy          % 检波器y方向网格间隔
+        rec_x           % 检波器x网格位置数组
+        rec_y           % 检波器y网格位置数组
         
         % 显示和常量参数
-        IT_DISPLAY              % 显示间隔
         DEGREES_TO_RADIANS      % 角度转弧度系数
         ZERO                    % 零值常量
         HUGEVAL                 % 大数值常量
@@ -75,14 +72,8 @@ classdef VTI_WaveFieldSolver < handle
         memory_dsigmaxy_dy  % sigmaxy对y的导数记忆变量
         
         % 地震记录数组
-        seismogram_vx       % x方向速度记录
-        seismogram_vy       % y方向速度记录
-        shot_records_vx     % x方向多炮记录
-        shot_records_vy     % y方向多炮记录
-        
-        % 输出参数
-        output_dir      % 输出目录
-        save_snapshots  % 是否保存波场快照的控制开关
+        seismogram_vx       % x方向速度记录（当前时间步）
+        seismogram_vy       % y方向速度记录（当前时间步）
         
         % PML衰减参数 (x方向)
         d_x             % 衰减系数
@@ -122,10 +113,6 @@ classdef VTI_WaveFieldSolver < handle
             
             obj.initialize(params);
             obj.setup_receivers();
-            
-            % 设置输出目录
-            current_dir = fileparts(fileparts(mfilename('fullpath')));
-            obj.output_dir = fullfile(current_dir, 'data', 'output', 'wavefield', 'forward');
             
             if isfield(params, 'compute_kernel')
                 obj.compute_kernel = params.compute_kernel;
@@ -185,8 +172,6 @@ classdef VTI_WaveFieldSolver < handle
             obj.xsource = (obj.ISOURCE - 1) * obj.DELTAX;
             obj.ysource = (obj.JSOURCE - 1) * obj.DELTAY;
             obj.ANGLE_FORCE = params.ANGLE_FORCE;  % 震源角度
-            obj.NSHOT = params.NSHOT;  % 炮数
-            obj.current_shot_number = 1;
 
             % 检波器参数
             obj.NREC = params.NREC;
@@ -196,7 +181,6 @@ classdef VTI_WaveFieldSolver < handle
             obj.rec_dy = params.rec_dy; 
 
            % 显示和常量参数
-            obj.IT_DISPLAY = params.IT_DISPLAY;
             obj.DEGREES_TO_RADIANS = pi / 180.0;
             obj.ZERO = 0.0;
             obj.HUGEVAL = 1.0e30;
@@ -229,8 +213,6 @@ classdef VTI_WaveFieldSolver < handle
             % 初始化地震记录数组
             obj.seismogram_vx = zeros(obj.NSTEP, obj.NREC);
             obj.seismogram_vy = zeros(obj.NSTEP, obj.NREC);
-            obj.shot_records_vx = zeros(obj.NSHOT, obj.NSTEP, obj.NREC);
-            obj.shot_records_vy = zeros(obj.NSHOT, obj.NSTEP, obj.NREC);
             
             % x方向的衰减参数
             obj.d_x = zeros(obj.NX, 1);
@@ -255,13 +237,6 @@ classdef VTI_WaveFieldSolver < handle
             obj.a_y_half = zeros(obj.NY, 1);
             obj.b_y = zeros(obj.NY, 1);
             obj.b_y_half = zeros(obj.NY, 1);
-            
-            % 波场快照保存控制
-            if isfield(params, 'save_snapshots')
-                obj.save_snapshots = params.save_snapshots;
-            else
-                obj.save_snapshots = false;
-            end
         end
         
         function add_source(obj, it)
@@ -633,39 +608,21 @@ classdef VTI_WaveFieldSolver < handle
         end
         
         function output_info(obj, it)
-            % 输出模拟状态信息和保存波场数据
+            % 输出模拟状态信息（只保留计算部分，不处理文件存储）
             vx_data = obj.vx;
             vy_data = obj.vy;
             
-      
-%{
-       % 计算速度场的最大幅值
+            % 计算速度场的最大幅值
             velocnorm = max(max(sqrt(vx_data.^2 + vy_data.^2)));
             
-            % 输出当前时间步和炮号信息
-            fprintf('炮号: %d/%d, 时间步: %d/%d\n', ...
-                obj.current_shot_number, obj.NSHOT, it, obj.NSTEP);
+            % 输出当前时间步信息（不再需要炮号信息）
+            fprintf('时间步: %d/%d\n', it, obj.NSTEP);
             fprintf('模拟时间: %.6f 秒\n', (it-1)*obj.DELTAT);
             fprintf('速度矢量最大范数 (m/s) = %f\n\n', velocnorm);
             
             % 检查数值稳定性
             if velocnorm > obj.STABILITY_THRESHOLD
                 error('模拟变得不稳定并发散');
-            end
-             
-%}
-
-            % 根据参数控制是否保存波场快照
-            if obj.save_snapshots
-                % 创建以炮号命名的子目录
-                shot_dir = fullfile(obj.output_dir, sprintf('shot_%03d', obj.current_shot_number));
-                if ~exist(shot_dir, 'dir')
-                    mkdir(shot_dir);
-                end
-                
-                % 保存波场数据
-                save_path = fullfile(shot_dir, sprintf('wavefield_%06d.mat', it));
-                save(save_path, 'vx_data', 'vy_data', '-v7.3');
             end
         end
         
@@ -686,10 +643,6 @@ classdef VTI_WaveFieldSolver < handle
             obj.memory_dsigmayy_dy = zeros(obj.NX, obj.NY);
             obj.memory_dsigmaxy_dx = zeros(obj.NX, obj.NY);
             obj.memory_dsigmaxy_dy = zeros(obj.NX, obj.NY);
-        end
-        
-        function set_current_shot(obj, ishot)
-            obj.current_shot_number = ishot;
         end
     end
 end 

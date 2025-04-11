@@ -62,22 +62,5 @@
     "// 输出控制参数": null,
     "IT_DISPLAY": 100,
     "save_snapshots": true,
-    "compute_kernel": "SIMD",
-
-    "// 伴随波场输出控制参数": null,
-    "save_adjoint_snapshots": true,
-    "snapshot_interval": 100,
-
-    "// FWI参数设置": null,
-    "optimization": "LBFGS",
-    "max_iterations": 2,
-    "tolerance": 0.1,
-
-    "// BB优化器参数": null,
-    "bb_params": {
-        "initial_step": 0.1,
-        "memory_length": 5,    
-        "max_step": 1.0,
-        "min_step": 1e-6
-    }
+    "compute_kernel": "SIMD"
 } 
