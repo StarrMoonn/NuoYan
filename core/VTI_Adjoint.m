@@ -172,10 +172,6 @@ classdef VTI_Adjoint < handle
                 adjoint_wavefield.vx(:,:,time_index) = wave_solver.vx;
                 adjoint_wavefield.vy(:,:,time_index) = wave_solver.vy;
             end
-            
-            % 清理内存
-            clear wave_solver;
-            
             fprintf('伴随波场计算完成！\n\n');
             
             % 保存完整的伴随波场
