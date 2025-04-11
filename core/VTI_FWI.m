@@ -5,20 +5,55 @@
 %   1. 主要功能：
 %      - 执行完整的FWI迭代优化过程
 %      - 使用Fletcher-Reeves共轭梯度法
+%      - 处理多参数反演（c11, c13, c33, c44, rho）
+%      - 实现自适应步长控制和线搜索
+%      - 支持模型约束和水层处理
 %
 % 输入参数：
 %   params结构体包含：
-%   - optimization_method：优化方法选择
-%     * 'gradient_descent'：梯度下降法（默认）
-%     * 'BB'：BB算法
-%     * 'LBFGS'：L-BFGS算法
-%     * 'FletcherReevesCG'：Fletcher-Reeves共轭梯度法
-%   - 其他优化器所需参数
+%   - initial_model：初始模型参数（c11,c13,c33,c44,rho）
+%   - max_iterations：最大迭代次数（默认10）
+%   - water_layer：水层厚度（网格点数）
+%   - nshots：炮数
+%   - modeling_params：正演模拟参数
+%   - adjoint_params：伴随计算参数
+%   - gradient_params：梯度计算参数
+%
+% 主要属性：
+%   - modeling：VTI_SingleShotModeling实例
+%   - adjoint：VTI_Adjoint实例
+%   - gradient_calculator：VTI_Gradient实例
+%   - current_model：当前模型参数
+%   - current_misfit：当前目标函数值（所有炮的L2范数之和）
+%   - current_gradient：当前总梯度
+%   - search_direction：当前搜索方向
+%
+% 优化控制参数：
+%   - step_length：步长（默认1.0）
+%   - step_length_decay：步长衰减因子（默认0.5）
+%   - max_update_value：最大更新幅度限制（默认30）
+%   - max_line_search：最大线搜索次数（默认10）
+%
+% 输出处理：
+%   - 支持模型、梯度、目标函数值的定期保存
+%   - 提供收敛曲线可视化
+%   - 记录完整的迭代历史
+%
+% 注意事项：
+%   1. 模型约束：
+%      - 确保c11*c33-c13^2 > 0的稳定性条件
+%      - 各参数都有物理合理的上下限
+%   2. 内存管理：
+%      - 每炮的波场计算完即释放
+%      - 梯度累加采用即时处理策略
+%   3. 水层处理：
+%      - 可选的水层梯度置零
+%      - 通过water_layer参数控制
 %
 % 作者：StarrMoonn
-% 日期：2025-01-10
+% 日期：2025-04-11
 %
-classdef VTI_FWI < handle
+classdef VTI_FWI < handle  
     properties
         % 基本依赖
         modeling          % VTI_SingleShotModeling实例

@@ -493,6 +493,99 @@ SEG-Y格式数据读取和处理函数。
    - 直接添加新函数实现新功能
    - 便于理解和调试单个组件
 
+### 波场数据结构对比
+
+#### 声波FWI中的波场数据
+1. **完整波场(pf/realp)**:
+   - 维度：[nz, nx, Nt]
+   - 内容：声波压力场的时空演化
+   - 用途：用于伴随波场反传和梯度计算
+   - 特点：单一物理量（压力场）
+
+2. **检波器记录(seisv0/realrec_p)**:
+   - 维度：[Nt, nx]
+   - 内容：检波器位置的压力场时间序列
+   - 用途：计算观测数据与合成数据的残差
+   - 特点：仅记录检波器位置的数据
+
+#### VTI-Elastic需要的对应结构
+1. **完整波场需要扩展为**:
+   - 维度：[nz, nx, Nt, ncomponents]
+   - 内容：应力场（σxx, σzz, σxz）和速度场（vx, vz）
+   - 用途：相同（伴随反传和梯度计算）
+   - 特点：多个物理量的耦合演化
+
+2. **检波器记录需要扩展为**:
+   - 维度：[Nt, nx, ncomponents]
+   - 内容：检波器位置的速度场分量（vx, vz）
+   - 用途：相同（残差计算）
+   - 特点：需要考虑多分量记录
+
+### 目标函数和梯度计算对比
+
+#### 目标函数计算
+1. **声波FWI (obj1)**:
+   - 使用归一化互相关目标函数
+   - 单一物理量（压力场）的匹配
+   - 计算公式：obj = -sum(sum(归一化互相关))
+
+2. **VTI-Elastic (misfit)**:
+   - 使用L2范数目标函数
+   - 同时考虑vx和vy两个分量
+   - 计算公式：misfit = 0.5 * (||residuals_vx||² + ||residuals_vy||²)
+
+#### 梯度计算
+1. **声波FWI (pb)**:
+   - 直接在时间域累加波场互相关
+   - 单一梯度分量（速度）
+   - 计算公式：bp = sum(正演波场 * 伴随波场)
+
+2. **VTI-Elastic (gradient)**:
+   - 使用MEX函数优化的梯度计算
+   - 多个弹性参数梯度：
+     * c11梯度：-∂vx/∂x * ∂v†x/∂x
+     * c13梯度：-(∂v†x/∂x * ∂vy/∂y + ∂v†y/∂y * ∂vx/∂x)
+     * c33梯度：-∂vy/∂y * ∂v†y/∂y
+     * c44梯度：-(∂vx/∂y + ∂vy/∂x) * (∂v†x/∂y + ∂v†y/∂x)
+     * ρ梯度：-v†i * ∂²vi/∂t²
+
+### 梯度计算的物理基础对比
+
+1. **声波FWI中的梯度(img1)**:
+   - 计算公式：gradient = (2/v^3) * correlation(forward, adjoint)
+   - 系数来源：声波方程中速度参数v的二次方倒数形式
+   - 特点：需要考虑速度的三次方作为系数
+
+2. **VTI-Elastic中的梯度**:
+   - 不需要参数的三次方项
+   - 弹性参数直接出现在方程中
+   - 梯度计算基于速度场的空间和时间导数
+   - 使用MEX函数优化计算性能
+
+### 目标函数值对比
+
+1. **声波FWI (objval0)**:
+   - 直接累加所有炮的目标函数值
+   - 使用归一化互相关目标函数
+   - 变量命名：objval0
+
+2. **VTI-Elastic (current_misfit)**:
+   - 使用L2范数目标函数
+   - 同时考虑vx和vy两个分量
+   - 变量命名：current_misfit
+   - 计算公式：0.5 * (||residuals_vx||² + ||residuals_vy||²)
+
+### 移植注意事项
+1. **梯度计算**:
+   - 不要移植声波的v^3系数
+   - 保持VTI-Elastic原有的梯度计算公式
+   - 使用MEX函数保证计算效率
+
+2. **目标函数**:
+   - 继续使用VTI-Elastic的L2范数目标函数
+   - 保持对多分量残差的处理
+   - 可以保留current_misfit的命名约定
+
 ## 与VTI-Elastic对比
 1. **编程范式差异**
    - 声波项目: 函数式编程，独立函数模块
@@ -587,4 +680,57 @@ SEG-Y格式数据读取和处理函数。
    - 避免引入过多依赖，保持模块化
 
 ## 结论
-声波各向同性FWI项目采用函数式编程范式实现了完整的声波波场模拟和反演功能。在移植到VTI-Elastic项目时，需要将其函数式结构适配到面向对象框架中，同时考虑从声波到弹性波、从各向同性到各向异性的物理模型扩展。保持算法核心逻辑不变的同时，调整接口和数据流以匹配VTI-Elastic的类结构，将有助于顺利完成代码迁移。 
+声波各向同性FWI项目采用函数式编程范式实现了完整的声波波场模拟和反演功能。在移植到VTI-Elastic项目时，需要将其函数式结构适配到面向对象框架中，同时考虑从声波到弹性波、从各向同性到各向异性的物理模型扩展。保持算法核心逻辑不变的同时，调整接口和数据流以匹配VTI-Elastic的类结构，将有助于顺利完成代码迁移。
+
+### 目标函数计算对比补充
+
+1. **声波FWI中的总目标函数计算**:
+   ```matlab
+   objval0 = sum(obj0);  % 直接累加所有炮的目标函数值
+   ```
+
+2. **VTI-Elastic中的总目标函数计算**:
+   ```matlab
+   % 在VTI_FWI.compute_misfit_and_gradient中
+   total_misfit = 0;
+   for ishot = 1:obj.nshots
+       [shot_gradient, shot_misfit] = obj.gradient_calculator.compute_single_shot_gradient(ishot, forward_wavefield);
+       total_misfit = total_misfit + shot_misfit;
+   end
+   ```
+
+3. **主要区别**:
+   - 声波代码：在一个函数中直接累加
+   - VTI-Elastic：分层实现
+     * VTI_Adjoint计算单炮目标函数值
+     * VTI_FWI累加所有炮的目标函数值
+   - 两种实现在数学上等价，但VTI-Elastic的实现更模块化 
+
+### 梯度处理对比补充
+
+1. **声波FWI中的梯度处理**:
+   ```matlab
+   % 简单的水层梯度置零
+   grad_stk1(1:water,:) = 0;  % grad_stk1表示叠加后的总梯度
+   ```
+
+2. **VTI-Elastic中的梯度处理**:
+   ```matlab
+   % 更灵活的水层处理机制
+   function gradient = apply_water_layer_mask(obj, gradient)
+       water_layer = obj.model_constraints.water_layer;
+       if water_layer > 0
+           fields = fieldnames(gradient);
+           for i = 1:length(fields)
+               field = fields{i};
+               gradient.(field)(1:water_layer, :) = 0;
+           end
+       end
+   end
+   ```
+
+3. **主要改进**:
+   - 面向对象的实现更灵活
+   - 可通过参数控制是否启用水层处理
+   - 自动处理所有弹性参数的水层梯度
+   - 保持了代码的扩展性 

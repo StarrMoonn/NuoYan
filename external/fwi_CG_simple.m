@@ -143,7 +143,7 @@ objval0 = sum(obj0);
 grad_stk1(1:water,:) = 0;
 
 % 保存梯度
-save grad_stk1 grad_stk1
+save grad_stk1
 
 %% 5. 共轭梯度迭代优化
 %%% 初始化迭代参数 %%%
